@@ -13,7 +13,7 @@ const theme = createTheme({
     text: { primary: '#202235', secondary: '#75788d' }
   },
   typography: {
-    fontFamily: '"Inter", "Segoe UI", sans-serif',
+    fontFamily: '"Segoe UI", Arial, sans-serif',
     h3: { fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.04em' },
     h5: { fontWeight: 800, letterSpacing: '-0.02em' },
     h6: { fontWeight: 800, letterSpacing: '-0.02em' },

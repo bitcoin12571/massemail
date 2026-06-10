@@ -10,15 +10,25 @@ const backendEnvPath = path.join(rootDir, 'backend', '.env');
 dotenv.config({ path: backendEnvPath });
 console.log(`[DATABASE] Loading .env from: ${backendEnvPath}`);
 const usePostgres = process.env.DATABASE_URL?.startsWith('postgres');
+const sqliteStorage = process.env.SQLITE_PATH
+  || (process.env.VERCEL ? '/tmp/mailora.sqlite' : path.join(rootDir, 'mailora.sqlite'));
 
 const sequelize = usePostgres
   ? new Sequelize(process.env.DATABASE_URL, {
       dialect: 'postgres',
-      logging: false
+      logging: false,
+      dialectOptions: process.env.DATABASE_SSL === 'false'
+        ? {}
+        : {
+            ssl: {
+              require: true,
+              rejectUnauthorized: false
+            }
+          }
     })
   : new Sequelize({
       dialect: 'sqlite',
-      storage: process.env.SQLITE_PATH || path.join(rootDir, 'mailora.sqlite'),
+      storage: sqliteStorage,
       logging: false
     });
 
