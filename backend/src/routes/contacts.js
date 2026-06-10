@@ -145,6 +145,9 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
     const contactIds = typeof req.body.contactIds === 'string'
       ? JSON.parse(req.body.contactIds)
       : req.body.contactIds;
+    const recipientSnapshots = typeof req.body.recipients === 'string'
+      ? JSON.parse(req.body.recipients)
+      : req.body.recipients;
     const { subject, message } = req.body;
     if (!Array.isArray(contactIds) || contactIds.length === 0) {
       return res.status(400).json({ error: 'Select at least one recipient' });
@@ -153,7 +156,7 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
       return res.status(400).json({ error: 'Subject and message are required' });
     }
 
-    const contacts = await Contact.findAll({
+    let contacts = await Contact.findAll({
       where: {
         id: contactIds,
         createdBy: req.user.id,
@@ -161,6 +164,41 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
         // TESTING: Skip verification check for dev mode
       }
     });
+
+    if (process.env.VERCEL && !process.env.DATABASE_URL && contacts.length < contactIds.length) {
+      const existingIds = new Set(contacts.map((contact) => contact.id));
+      const snapshotsById = new Map(
+        (Array.isArray(recipientSnapshots) ? recipientSnapshots : [])
+          .filter((recipient) => contactIds.includes(recipient.id))
+          .map((recipient) => [recipient.id, recipient])
+      );
+
+      for (const contactId of contactIds) {
+        if (existingIds.has(contactId)) continue;
+
+        const snapshot = snapshotsById.get(contactId);
+        if (!snapshot || snapshot.status !== 'active' || !isValidEmail(snapshot.email)) continue;
+
+        const normalizedEmail = snapshot.email.toLowerCase().trim();
+        const [contact] = await Contact.findOrCreate({
+          where: { email: normalizedEmail },
+          defaults: {
+            id: contactId,
+            email: normalizedEmail,
+            name: snapshot.name?.trim() || null,
+            status: 'active',
+            verified: true,
+            createdBy: req.user.id
+          }
+        });
+
+        if (contact.createdBy === req.user.id && contact.status === 'active') {
+          contacts.push(contact);
+          existingIds.add(contact.id);
+        }
+      }
+    }
+
     if (!contacts.length) {
       return res.status(400).json({ error: 'No active recipients were found.' });
     }

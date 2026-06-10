@@ -73,6 +73,12 @@ export default function SendEmail({ onOpenSettings }) {
     try {
       const data = new FormData();
       data.append('contactIds', JSON.stringify(selected));
+      data.append('recipients', JSON.stringify(selectedContacts.map(({ id, email, name, status }) => ({
+        id,
+        email,
+        name,
+        status
+      }))));
       data.append('subject', subject);
       data.append('message', message);
       files.forEach((file) => data.append('attachments', file));
