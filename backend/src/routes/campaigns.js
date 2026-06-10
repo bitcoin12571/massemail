@@ -9,6 +9,8 @@ import {
   getQueueStats,
   retryFailedJobs
 } from '../services/queueService.js';
+import { validateRequest } from '../middleware/validation.js';
+import { campaignSchema, campaignSendSchema, previewEmailSchema } from '../schemas/email.schema.js';
 
 const router = express.Router();
 
@@ -78,12 +80,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', validateRequest(campaignSchema), async (req, res) => {
   try {
     const { name, subject, htmlContent, textContent } = req.body;
-    if (!name || !subject || !htmlContent) {
-      return res.status(400).json({ error: 'Name, subject and email content are required' });
-    }
     const campaign = await Campaign.create({
       name,
       subject,
@@ -97,7 +96,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.post('/:id/send', async (req, res) => {
+router.post('/:id/send', validateRequest(campaignSendSchema), async (req, res) => {
   try {
     console.log(`\n[CAMPAIGN SEND] 📧 Sending campaign ${req.params.id}`);
     const campaign = await Campaign.findOne({ where: { id: req.params.id, createdBy: req.user.id } });
@@ -131,6 +130,48 @@ router.post('/:id/send', async (req, res) => {
   }
 });
 
+router.post('/:id/preview', validateRequest(previewEmailSchema), async (req, res) => {
+  try {
+    const campaign = await Campaign.findOne({ where: { id: req.params.id, createdBy: req.user.id } });
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+    const contact = await Contact.findOne({ where: { id: req.body.contactId, createdBy: req.user.id } });
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+
+    // Personalize the email content with contact data
+    const personalize = (template, contact) => {
+      let content = template;
+      content = content.replace(/{{firstName}}/g, contact.firstName || '');
+      content = content.replace(/{{lastName}}/g, contact.lastName || '');
+      content = content.replace(/{{email}}/g, contact.email || '');
+      // Support any custom fields in the contact
+      if (contact.customData) {
+        Object.entries(contact.customData).forEach(([key, value]) => {
+          content = content.replace(new RegExp(`{{${key}}}`, 'g'), value || '');
+        });
+      }
+      return content;
+    };
+
+    const previewHtml = personalize(campaign.htmlContent, contact);
+    const previewSubject = personalize(campaign.subject, contact);
+
+    res.json({
+      subject: previewSubject,
+      htmlContent: previewHtml,
+      textContent: campaign.textContent ? personalize(campaign.textContent, contact) : undefined,
+      contact: {
+        id: contact.id,
+        email: contact.email,
+        firstName: contact.firstName,
+        lastName: contact.lastName
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/:id/pause', async (req, res) => {
   const campaign = await Campaign.findOne({ where: { id: req.params.id, createdBy: req.user.id } });
   if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
@@ -154,6 +195,97 @@ router.get('/:id', async (req, res) => {
     raw: true
   });
   res.json({ campaign, stats });
+});
+
+// Get paginated email list for a campaign
+router.get('/:id/emails', async (req, res) => {
+  try {
+    const campaign = await Campaign.findOne({ where: { id: req.params.id, createdBy: req.user.id } });
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const status = req.query.status;
+    const offset = (page - 1) * limit;
+
+    const where = { campaignId: campaign.id };
+    if (status) where.status = status;
+
+    const { count, rows: emails } = await Email.findAndCountAll({
+      where,
+      attributes: ['id', 'recipientEmail', 'status', 'sentAt', 'openedAt', 'clickedAt', 'failureReason', 'createdAt'],
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset
+    });
+
+    res.json({
+      emails,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        pages: Math.ceil(count / limit)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get analytics for a campaign
+router.get('/:id/analytics', async (req, res) => {
+  try {
+    const campaign = await Campaign.findOne({ where: { id: req.params.id, createdBy: req.user.id } });
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+
+    // Get all email statuses
+    const emails = await Email.findAll({
+      where: { campaignId: campaign.id },
+      attributes: ['status', 'sentAt', 'openedAt', 'clickedAt', [fn('COUNT', col('*')), 'count']],
+      group: ['status'],
+      raw: true
+    });
+
+    // Count by status
+    const statusCounts = {};
+    emails.forEach(e => {
+      statusCounts[e.status] = parseInt(e.count) || 0;
+    });
+
+    const total = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+    const sent = statusCounts['sent'] || statusCounts['delivered'] || 0;
+    const opened = statusCounts['opened'] || 0;
+    const clicked = statusCounts['clicked'] || 0;
+    const failed = statusCounts['failed'] || 0;
+    const bounced = statusCounts['bounced'] || 0;
+
+    res.json({
+      campaign: {
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        createdAt: campaign.createdAt,
+        sentAt: campaign.sentAt
+      },
+      summary: {
+        total,
+        sent,
+        pending: statusCounts['pending'] || 0,
+        opened,
+        openRate: sent ? Math.round((opened / sent) * 100) : 0,
+        clicked,
+        clickRate: sent ? Math.round((clicked / sent) * 100) : 0,
+        failed,
+        bounced,
+        failureRate: total ? Math.round((failed / total) * 100) : 0,
+        bounceRate: total ? Math.round((bounced / total) * 100) : 0
+      },
+      statusBreakdown: statusCounts
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // DEBUG: Check failed emails with error reasons

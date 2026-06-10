@@ -7,6 +7,8 @@ import Email from '../models/Email.js';
 import { emailQueue } from '../services/queueService.js';
 import { isRealEmailDeliveryConfigured } from '../services/emailService.js';
 import { parseCSV } from '../utils/csvParser.js';
+import { validateRequest, validateQuery } from '../middleware/validation.js';
+import { contactSchema, bulkContactSchema, quickEmailSchema } from '../schemas/email.schema.js';
 import {
   generateVerificationToken,
   isTokenExpired,
@@ -62,13 +64,10 @@ router.get('/', async (req, res) => {
 });
 
 // Create contact
-router.post('/', async (req, res) => {
+router.post('/', validateRequest(contactSchema), async (req, res) => {
   try {
-    const { email, name, tags, company } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ error: 'Invalid email format. Please provide a valid email address.' });
-    }
+    const { email, name, customData } = req.body;
+    const company = customData?.company || '';
 
     const verificationToken = generateVerificationToken();
     const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
