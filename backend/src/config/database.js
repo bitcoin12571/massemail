@@ -1,4 +1,5 @@
 import { Sequelize } from 'sequelize';
+import sqlite3 from 'sqlite3';
 import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +29,7 @@ const sequelize = usePostgres
     })
   : new Sequelize({
       dialect: 'sqlite',
+      dialectModule: sqlite3,
       storage: sqliteStorage,
       logging: false
     });

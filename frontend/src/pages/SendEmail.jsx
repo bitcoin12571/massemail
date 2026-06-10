@@ -14,7 +14,7 @@ import {
   Typography
 } from '@mui/material';
 import { File, Image, Paperclip, Search, Send, UsersRound, X } from 'lucide-react';
-import API from '../services/api';
+import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 
 export default function SendEmail({ onOpenSettings }) {
@@ -83,7 +83,7 @@ export default function SendEmail({ onOpenSettings }) {
       setMessage('');
       setFiles([]);
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.error || t('sendFailed') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('sendFailed')) });
     } finally {
       setSending(false);
     }

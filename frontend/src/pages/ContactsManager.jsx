@@ -25,7 +25,7 @@ import {
   Upload,
   UsersRound
 } from 'lucide-react';
-import API from '../services/api';
+import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 
 export default function ContactsManager() {
@@ -41,7 +41,7 @@ export default function ContactsManager() {
       const { data } = await API.get('/contacts', { params: { search, limit: 500 } });
       setContacts(data.contacts);
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.error || 'Could not load the email database' });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not load the email database') });
     }
   };
 
@@ -58,7 +58,7 @@ export default function ContactsManager() {
       setNotice({ type: 'success', text: t('emailAdded') });
       load();
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.error || 'Could not add this email' });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not add this email') });
     }
   };
 
@@ -71,7 +71,7 @@ export default function ContactsManager() {
       setNotice({ type: 'success', text: t('imported', { imported: data.imported, total: data.total }) });
       load();
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.error || 'CSV import failed' });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, 'CSV import failed') });
     } finally {
       event.target.value = '';
     }

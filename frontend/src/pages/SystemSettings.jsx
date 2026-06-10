@@ -14,7 +14,7 @@ import {
   Stack
 } from '@mui/material';
 import { Save, Send, Settings2, Zap, Palette, Volume2, Gauge } from 'lucide-react';
-import API from '../services/api';
+import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { useUserPreferences } from '../contexts/UserPreferencesContext';
 
@@ -59,7 +59,7 @@ export default function SystemSettings() {
       setSettings(data);
       setNotice({ type: 'success', text: t('settingsSaved') });
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.error || t('settingsSaveError') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('settingsSaveError')) });
     } finally {
       setBusy(false);
     }
@@ -75,7 +75,7 @@ export default function SystemSettings() {
         text: settings.provider === 'preview' ? t('previewTestDone') : t('testEmailSent')
       });
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.error || t('testEmailFailed') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('testEmailFailed')) });
     } finally {
       setBusy(false);
     }

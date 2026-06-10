@@ -12,7 +12,7 @@ import {
   Typography
 } from '@mui/material';
 import { CheckCircle2, Clock3, RefreshCw, RotateCcw, Trash2, Zap } from 'lucide-react';
-import API from '../services/api';
+import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { useUserPreferences } from '../contexts/UserPreferencesContext';
 import QueueVisualization from './QueueVisualization';
@@ -32,7 +32,7 @@ export default function QueueMonitor() {
       const { data } = await API.get('/campaigns/stats/queue');
       setStats(data);
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.error || 'Could not connect to the queue' });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not connect to the queue') });
     }
   };
 

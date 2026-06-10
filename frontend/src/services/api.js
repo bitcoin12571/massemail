@@ -11,6 +11,25 @@ const api = axios.create({
   }
 });
 
+export function getApiErrorMessage(error, fallback = 'Request failed') {
+  const payload = error?.response?.data;
+  const candidate = payload?.error ?? payload?.message ?? error?.message;
+
+  if (typeof candidate === 'string' && candidate.trim()) {
+    return candidate;
+  }
+
+  if (candidate && typeof candidate.message === 'string') {
+    return candidate.message;
+  }
+
+  if (candidate && typeof candidate.code === 'string') {
+    return candidate.code;
+  }
+
+  return fallback;
+}
+
 // Add auth token to every request
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('authToken');

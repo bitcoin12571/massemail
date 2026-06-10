@@ -33,7 +33,7 @@ import {
   Sparkles,
   UsersRound
 } from 'lucide-react';
-import API from '../services/api';
+import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import AnimatedStatCard from '../components/AnimatedStatCard';
 import { containerVariants } from '../utils/animations';
@@ -87,7 +87,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
       setNotice({ type: 'success', text: 'Campaign created and saved as draft' });
       refresh();
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.error || 'Could not create campaign' });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not create campaign') });
     } finally {
       setLoading(false);
     }
@@ -100,7 +100,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
       setNotice({ type: 'success', text: `${data.emailCount} emails added to the delivery queue` });
       refresh();
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.error || 'Could not send campaign' });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not send campaign') });
     } finally {
       setLoading(false);
     }
