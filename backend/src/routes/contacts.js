@@ -67,7 +67,6 @@ router.get('/', async (req, res) => {
 router.post('/', validateRequest(contactSchema), async (req, res) => {
   try {
     const { email, name, customData } = req.body;
-    const company = customData?.company || '';
 
     const verificationToken = generateVerificationToken();
     const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
@@ -75,11 +74,10 @@ router.post('/', validateRequest(contactSchema), async (req, res) => {
     const contact = await Contact.create({
       email: email.toLowerCase().trim(),
       name,
-      tags: tags || [],
       verified: false,
       verificationToken,
       verificationTokenExpiry,
-      customData: { company: company || '' },
+      customData: customData || {},
       createdBy: req.user.id
     });
 
