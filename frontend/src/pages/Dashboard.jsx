@@ -1,0 +1,173 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Avatar,
+  Box,
+  Button,
+  IconButton,
+  Stack,
+  Typography
+} from '@mui/material';
+import {
+  BarChart3,
+  Bell,
+  ContactRound,
+  History,
+  Mail,
+  MailPlus,
+  Menu,
+  Search,
+  Settings
+} from 'lucide-react';
+import CampaignDashboard from './CampaignDashboard';
+import QueueMonitor from '../components/QueueMonitor';
+import ContactsManager from './ContactsManager';
+import SystemSettings from './SystemSettings';
+import SendEmail from './SendEmail';
+import { useLanguage } from '../i18n.jsx';
+import { pageTransition } from '../utils/animations';
+import AnimatedLanguageSwitcher from '../components/AnimatedLanguageSwitcher';
+
+export default function Dashboard() {
+  const { language, setLanguage, t } = useLanguage();
+  const [activePage, setActivePage] = useState(0);
+  const [mobileNav, setMobileNav] = useState(false);
+  const navigation = [
+    { label: t('emailDatabase'), icon: ContactRound },
+    { label: t('sendNow'), icon: MailPlus },
+    { label: t('sendHistory'), icon: History },
+    { label: t('deliveryStatus'), icon: BarChart3 }
+  ];
+
+  return (
+    <Box className="app-shell">
+      <Box component="aside" className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
+        <Box className="brand">
+          <Box className="brand-mark"><Mail size={21} strokeWidth={2.5} /></Box>
+          <Box>
+            <Typography className="brand-name">Mail Center</Typography>
+            <Typography className="brand-subtitle">Internal system</Typography>
+          </Box>
+        </Box>
+
+        <Typography className="nav-caption">{t('companyTools')}</Typography>
+        <Stack spacing={0.75}>
+          {navigation.map(({ label, icon: Icon }, index) => (
+            <Button
+              key={label}
+              className={`nav-item ${activePage === index ? 'active' : ''}`}
+              startIcon={<Icon size={19} />}
+              onClick={() => {
+                setActivePage(index);
+                setMobileNav(false);
+              }}
+            >
+              {label}
+              {index === 3 && <Box component="span" className="live-dot" />}
+            </Button>
+          ))}
+        </Stack>
+
+        <Box className="sidebar-spacer" />
+        <Button
+          className={`nav-item ${activePage === 4 ? 'active' : ''}`}
+          startIcon={<Settings size={19} />}
+          onClick={() => {
+            setActivePage(4);
+            setMobileNav(false);
+          }}
+        >
+          {t('systemSettings')}
+        </Button>
+
+        <Box className="profile-card">
+          <Avatar sx={{ width: 38, height: 38, bgcolor: '#d9f6ea', color: '#087a55' }}>AM</Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography fontWeight={700} noWrap>{t('administrator')}</Typography>
+            <Typography variant="caption" color="text.secondary">{t('companyAccess')}</Typography>
+          </Box>
+        </Box>
+      </Box>
+
+      {mobileNav && <Box className="nav-backdrop" onClick={() => setMobileNav(false)} />}
+
+      <Box component="main" className="main-panel">
+        <Box component="header" className="topbar">
+          <IconButton className="mobile-menu" onClick={() => setMobileNav(true)}>
+            <Menu size={21} />
+          </IconButton>
+          <Box className="search-box">
+            <Search size={18} />
+            <input aria-label="Search" placeholder={t('searchDatabase')} />
+            <Box component="span">⌘ K</Box>
+          </Box>
+          <Box className="topbar-actions">
+            <AnimatedLanguageSwitcher />
+            <IconButton className="soft-icon"><Bell size={19} /></IconButton>
+            <Avatar sx={{ width: 36, height: 36, bgcolor: '#262b40', fontSize: 13 }}>AM</Avatar>
+          </Box>
+        </Box>
+
+        <Box className="page-content">
+          <AnimatePresence mode="wait">
+            {activePage === 0 && (
+              <motion.div
+                key="contacts"
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                variants={pageTransition}
+              >
+                <ContactsManager mode="database" />
+              </motion.div>
+            )}
+            {activePage === 1 && (
+              <motion.div
+                key="send"
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                variants={pageTransition}
+              >
+                <SendEmail onOpenSettings={() => setActivePage(4)} />
+              </motion.div>
+            )}
+            {activePage === 2 && (
+              <motion.div
+                key="campaign"
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                variants={pageTransition}
+              >
+                <CampaignDashboard onOpenDatabase={() => setActivePage(1)} />
+              </motion.div>
+            )}
+            {activePage === 3 && (
+              <motion.div
+                key="queue"
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                variants={pageTransition}
+              >
+                <QueueMonitor />
+              </motion.div>
+            )}
+            {activePage === 4 && (
+              <motion.div
+                key="settings"
+                initial="initial"
+                animate="animate"
+                exit="exit"
+                variants={pageTransition}
+              >
+                <SystemSettings />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </Box>
+      </Box>
+    </Box>
+  );
+}

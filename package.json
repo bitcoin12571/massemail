@@ -1,0 +1,44 @@
+{
+  "name": "email-dashboard",
+  "version": "1.0.0",
+  "description": "Mailora email campaign platform",
+  "main": "backend/src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail -n backend,frontend \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "node --watch backend/src/index.js",
+    "dev:frontend": "vite --config frontend/vite.config.js",
+    "build": "npm run build:frontend",
+    "build:backend": "node --check backend/src/index.js",
+    "build:frontend": "vite build --config frontend/vite.config.js",
+    "start": "node backend/src/index.js"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/material": "^7.3.6",
+    "axios": "^1.13.2",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "framer-motion": "^12.40.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^0.468.0",
+    "multer": "^2.0.2",
+    "nodemailer": "^8.0.10",
+    "pg": "^8.21.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "recharts": "^3.8.1",
+    "redis": "^6.0.0",
+    "resend": "^6.12.4",
+    "sequelize": "^6.37.8",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.7.0",
+    "concurrently": "^8.2.1",
+    "vite": "^6.4.1"
+  }
+}
