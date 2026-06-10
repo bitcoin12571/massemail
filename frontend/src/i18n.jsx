@@ -128,6 +128,12 @@ const translations = {
     ,sendFailed: 'Email could not be sent.'
     ,previewSendBlocked: 'Real delivery is not configured. Connect Gmail or Outlook before sending.'
     ,configureEmail: 'Configure email'
+    ,aiImproveTitle: 'AI writing assistant'
+    ,aiImproveHelp: 'Polish the subject and message while preserving your meaning.'
+    ,aiImprove: 'Improve with AI'
+    ,aiImproving: 'Improving...'
+    ,aiImproveSuccess: 'The email was improved. Review it before sending.'
+    ,aiImproveFailed: 'The email could not be improved.'
   },
   ro: {
     emailDatabase: 'Baza de emailuri', sendHistory: 'Istoric trimiteri', deliveryStatus: 'Starea livrărilor', systemSettings: 'Setări sistem',
@@ -180,6 +186,12 @@ const translations = {
     ,sendFailed: 'Emailul nu a putut fi trimis.'
     ,previewSendBlocked: 'Trimiterea reală nu este configurată. Conectează Gmail sau Outlook înainte de expediere.'
     ,configureEmail: 'Configurează emailul'
+    ,aiImproveTitle: 'Asistent de scriere AI'
+    ,aiImproveHelp: 'Îmbunătățește subiectul și mesajul fără a schimba sensul.'
+    ,aiImprove: 'Îmbunătățește cu AI'
+    ,aiImproving: 'Se îmbunătățește...'
+    ,aiImproveSuccess: 'Emailul a fost îmbunătățit. Verifică-l înainte de trimitere.'
+    ,aiImproveFailed: 'Emailul nu a putut fi îmbunătățit.'
   },
   ru: {
     emailDatabase: 'База email', sendHistory: 'История отправок', deliveryStatus: 'Статус доставки', systemSettings: 'Настройки системы',
@@ -232,6 +244,12 @@ const translations = {
     ,sendFailed: 'Не удалось отправить письмо.'
     ,previewSendBlocked: 'Реальная отправка не настроена. Подключите Gmail или Outlook.'
     ,configureEmail: 'Настроить почту'
+    ,aiImproveTitle: 'AI-помощник'
+    ,aiImproveHelp: 'Улучшает тему и текст, сохраняя исходный смысл.'
+    ,aiImprove: 'Улучшить с AI'
+    ,aiImproving: 'Улучшение...'
+    ,aiImproveSuccess: 'Письмо улучшено. Проверьте его перед отправкой.'
+    ,aiImproveFailed: 'Не удалось улучшить письмо.'
   }
 };
 

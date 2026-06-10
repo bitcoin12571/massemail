@@ -13,12 +13,12 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { File, Image, Paperclip, Search, Send, UsersRound, X } from 'lucide-react';
+import { File, Image, Paperclip, Search, Send, Sparkles, UsersRound, X } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 
 export default function SendEmail({ onOpenSettings }) {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const [contacts, setContacts] = useState([]);
   const [selected, setSelected] = useState([]);
   const [search, setSearch] = useState('');
@@ -26,6 +26,7 @@ export default function SendEmail({ onOpenSettings }) {
   const [message, setMessage] = useState('');
   const [files, setFiles] = useState([]);
   const [sending, setSending] = useState(false);
+  const [improving, setImproving] = useState(false);
   const [notice, setNotice] = useState(null);
   const [deliveryMode, setDeliveryMode] = useState('preview');
 
@@ -66,6 +67,20 @@ export default function SendEmail({ onOpenSettings }) {
     }
     setFiles(combined);
     event.target.value = '';
+  };
+
+  const improveWithAI = async () => {
+    setImproving(true);
+    try {
+      const { data } = await API.post('/ai/rewrite', { subject, message, language });
+      setSubject(data.subject);
+      setMessage(data.message);
+      setNotice({ type: 'success', text: t('aiImproveSuccess') });
+    } catch (error) {
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('aiImproveFailed')) });
+    } finally {
+      setImproving(false);
+    }
   };
 
   const send = async () => {
@@ -176,6 +191,20 @@ export default function SendEmail({ onOpenSettings }) {
               value={message}
               onChange={(event) => setMessage(event.target.value)}
             />
+            <Box className="ai-rewrite-row">
+              <Box>
+                <Typography fontWeight={750}>{t('aiImproveTitle')}</Typography>
+                <Typography variant="body2" color="text.secondary">{t('aiImproveHelp')}</Typography>
+              </Box>
+              <Button
+                variant="outlined"
+                startIcon={<Sparkles size={17} />}
+                disabled={improving || sending || !message.trim()}
+                onClick={improveWithAI}
+              >
+                {improving ? t('aiImproving') : t('aiImprove')}
+              </Button>
+            </Box>
             <Box className="attachment-box">
               <Box>
                 <Typography fontWeight={750}>{t('attachments')}</Typography>
@@ -203,7 +232,7 @@ export default function SendEmail({ onOpenSettings }) {
                 ))}
               </Box>
             )}
-            {sending && <LinearProgress />}
+            {(sending || improving) && <LinearProgress />}
             <Button
               className="composer-send-button"
               size="large"

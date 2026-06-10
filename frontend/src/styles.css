@@ -345,6 +345,7 @@ button:active:not(:disabled) {
 .composer-fields { display: grid; gap: 17px; padding: 23px; }
 .selected-recipient-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px; background: #f7f7fb; border-radius: 10px; }
 .attachment-box { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px; background: #fafafd; border: 1px dashed #d9d8e3; border-radius: 12px; }
+.ai-rewrite-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; color: #5142c8; background: linear-gradient(135deg, #f4f1ff, #fbfaff); border: 1px solid #ddd7ff; border-radius: 12px; }
 .attachment-buttons { display: flex; gap: 8px; }
 .attached-files { display: grid; gap: 7px; }
 .attached-file { display: grid; grid-template-columns: 20px minmax(0, 1fr) 35px; align-items: center; gap: 9px; padding: 8px 10px; background: #f7f7fb; border-radius: 8px; }
@@ -387,7 +388,7 @@ button:active:not(:disabled) {
   .queue-panel .panel-header { align-items: flex-start; gap: 16px; flex-direction: column; }
   .smtp-fields { grid-template-columns: 1fr; }
   .smtp-fields > * { grid-column: auto !important; }
-  .attachment-box { align-items: flex-start; flex-direction: column; }
+  .attachment-box, .ai-rewrite-row { align-items: flex-start; flex-direction: column; }
 }
 
 @media (max-width: 450px) {
