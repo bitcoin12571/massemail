@@ -46,7 +46,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/')) {
       localStorage.removeItem('authToken');
       localStorage.removeItem('mailoraUser');
-      window.location.reload();
+      window.dispatchEvent(new Event('mailora:logout'));
     }
     return Promise.reject(error);
   }

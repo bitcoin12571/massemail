@@ -40,11 +40,13 @@ export function initializeApp() {
 }
 
 // Middleware
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  credentials: false
-}));
+app.use(cors(process.env.VERCEL
+  ? { origin: false }
+  : {
+      origin: '*',
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+      credentials: false
+    }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -71,8 +73,7 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', database: sequelize.getDialect(), timestamp: new Date().toISOString() });
 });
 
-// QUICK TEST: Send email without auth
-app.post('/api/quick-send', async (req, res) => {
+app.post('/api/quick-send', authMiddleware, async (req, res) => {
   try {
     const { to, subject, message } = req.body;
     console.log('\n[QUICK SEND] 🚀 Sending email...');

@@ -13,6 +13,7 @@ import {
   Bell,
   ContactRound,
   History,
+  LogOut,
   Mail,
   MailPlus,
   Menu,
@@ -28,7 +29,7 @@ import { useLanguage } from '../i18n.jsx';
 import { pageTransition } from '../utils/animations';
 import AnimatedLanguageSwitcher from '../components/AnimatedLanguageSwitcher';
 
-export default function Dashboard() {
+export default function Dashboard({ user, onLogout }) {
   const { language, setLanguage, t } = useLanguage();
   const [activePage, setActivePage] = useState(0);
   const [mobileNav, setMobileNav] = useState(false);
@@ -83,9 +84,12 @@ export default function Dashboard() {
         <Box className="profile-card">
           <Avatar sx={{ width: 38, height: 38, bgcolor: '#d9f6ea', color: '#087a55' }}>AM</Avatar>
           <Box sx={{ minWidth: 0 }}>
-            <Typography fontWeight={700} noWrap>{t('administrator')}</Typography>
-            <Typography variant="caption" color="text.secondary">{t('companyAccess')}</Typography>
+            <Typography fontWeight={700} noWrap>{user?.name || t('administrator')}</Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>{user?.email || t('companyAccess')}</Typography>
           </Box>
+          <IconButton size="small" aria-label="Log out" onClick={onLogout}>
+            <LogOut size={17} />
+          </IconButton>
         </Box>
       </Box>
 

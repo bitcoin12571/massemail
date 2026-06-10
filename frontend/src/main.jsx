@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { createTheme, CssBaseline, ThemeProvider } from '@mui/material';
-import Dashboard from './pages/Dashboard.jsx';
+import App from './App.jsx';
 import './styles.css';
 import { LanguageProvider } from './i18n.jsx';
 import { UserPreferencesProvider } from './contexts/UserPreferencesContext.jsx';
@@ -33,7 +33,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <CssBaseline />
       <LanguageProvider>
         <UserPreferencesProvider>
-          <Dashboard />
+          <App />
         </UserPreferencesProvider>
       </LanguageProvider>
     </ThemeProvider>
