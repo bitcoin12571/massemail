@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { sequelize } from './config/database.js';
 import { initializeQueue } from './services/queueService.js';
 import { initializeEmailService } from './services/emailService.js';
+import { startScheduler } from './services/schedulerService.js';
 import authRoutes from './routes/auth.js';
 import contactRoutes from './routes/contacts.js';
 import campaignRoutes from './routes/campaigns.js';
@@ -31,6 +32,9 @@ export function initializeApp() {
       console.log('Models synced');
 
       await initializeEmailService();
+
+      // Start the email scheduler
+      startScheduler();
     })().catch((error) => {
       initializationPromise = undefined;
       throw error;
@@ -90,6 +94,27 @@ app.post('/api/quick-send', authMiddleware, async (req, res) => {
     res.json({ ok: true, id: result.messageId });
   } catch (error) {
     console.error('[QUICK SEND] ❌', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Scheduler management endpoints (debug/testing)
+app.post('/api/scheduler/trigger', authMiddleware, async (req, res) => {
+  try {
+    const { manualTriggerScheduler } = await import('./services/schedulerService.js');
+    await manualTriggerScheduler();
+    res.json({ success: true, message: 'Scheduler triggered manually' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/scheduler/status', async (req, res) => {
+  try {
+    const { getSchedulerStatus } = await import('./services/schedulerService.js');
+    const status = getSchedulerStatus();
+    res.json(status);
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
