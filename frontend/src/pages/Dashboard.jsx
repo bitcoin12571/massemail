@@ -10,7 +10,6 @@ import {
 } from '@mui/material';
 import {
   BarChart3,
-  Bell,
   ContactRound,
   History,
   LogOut,
@@ -30,7 +29,7 @@ import AnimatedLanguageSwitcher from '../components/AnimatedLanguageSwitcher';
 import smartGrowthLogo from '../assets/smart-growth-ai-logo.png';
 
 export default function Dashboard({ user, onLogout }) {
-  const { language, setLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const [activePage, setActivePage] = useState(0);
   const [mobileNav, setMobileNav] = useState(false);
   const navigation = [
@@ -112,8 +111,6 @@ export default function Dashboard({ user, onLogout }) {
           </Box>
           <Box className="topbar-actions">
             <AnimatedLanguageSwitcher />
-            <IconButton className="soft-icon"><Bell size={19} /></IconButton>
-            <Avatar sx={{ width: 36, height: 36, bgcolor: '#262b40', fontSize: 13 }}>AM</Avatar>
           </Box>
         </Box>
 

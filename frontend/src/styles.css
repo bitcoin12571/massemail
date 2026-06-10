@@ -154,10 +154,10 @@ body {
 .search-box input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #333548; font: inherit; }
 .search-box span { font-size: 11px; color: #a5a7b4; padding: 2px 6px; background: white; border: 1px solid #e5e6eb; border-radius: 5px; }
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
-.language-switcher { display: flex; gap: 2px; padding: 3px; background: #f1f2f6; border: 1px solid #e6e7ec; border-radius: 10px; }
-.language-switcher button { min-width: 38px; padding: 5px 8px; color: #77798a; font-size: 11px; border-radius: 7px; }
-.language-switcher button.active { color: white; background: #6756e8; }
-.soft-icon { border: 1px solid #e8e9ee !important; border-radius: 10px !important; }
+.language-switcher { display: flex; gap: 6px; }
+.language-switcher button { min-width: 64px; min-height: 44px; padding: 10px 16px; color: #77798a; font-size: 14px; font-weight: 800; border: 1px solid #e2e3e9; border-radius: 11px; background: #f5f6f9; }
+.language-switcher button:hover { background: #eceafa; }
+.language-switcher button.active { color: white; border-color: #6756e8; background: #6756e8; box-shadow: 0 5px 14px #6756e838; }
 .mobile-menu { display: none !important; }
 .page-content { max-width: 1450px; margin: 0 auto; padding: 38px; }
 
