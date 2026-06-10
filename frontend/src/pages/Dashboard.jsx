@@ -14,7 +14,6 @@ import {
   ContactRound,
   History,
   LogOut,
-  Mail,
   MailPlus,
   Menu,
   Search,
@@ -28,6 +27,7 @@ import SendEmail from './SendEmail';
 import { useLanguage } from '../i18n.jsx';
 import { pageTransition } from '../utils/animations';
 import AnimatedLanguageSwitcher from '../components/AnimatedLanguageSwitcher';
+import smartGrowthLogo from '../assets/smart-growth-ai-logo.png';
 
 export default function Dashboard({ user, onLogout }) {
   const { language, setLanguage, t } = useLanguage();
@@ -44,9 +44,14 @@ export default function Dashboard({ user, onLogout }) {
     <Box className="app-shell">
       <Box component="aside" className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
         <Box className="brand">
-          <Box className="brand-mark"><Mail size={21} strokeWidth={2.5} /></Box>
+          <Box
+            component="img"
+            className="brand-logo"
+            src={smartGrowthLogo}
+            alt="Smart Growth AI"
+          />
           <Box>
-            <Typography className="brand-name">Mail Center</Typography>
+            <Typography className="brand-name">Smart Growth AI</Typography>
             <Typography className="brand-subtitle">Internal system</Typography>
           </Box>
         </Box>

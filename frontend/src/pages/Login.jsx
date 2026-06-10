@@ -7,8 +7,9 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { LockKeyhole, Mail } from 'lucide-react';
+import { LockKeyhole } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
+import smartGrowthLogo from '../assets/smart-growth-ai-logo.png';
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('');
@@ -35,9 +36,14 @@ export default function Login({ onLogin }) {
     <Box className="login-shell">
       <Paper component="form" className="login-card" onSubmit={submit}>
         <Box className="login-brand">
-          <Box className="brand-mark"><Mail size={22} strokeWidth={2.5} /></Box>
+          <Box
+            component="img"
+            className="brand-logo"
+            src={smartGrowthLogo}
+            alt="Smart Growth AI"
+          />
           <Box>
-            <Typography variant="h5">Mail Center</Typography>
+            <Typography variant="h5">Smart Growth AI</Typography>
             <Typography variant="body2" color="text.secondary">Administrator access</Typography>
           </Box>
         </Box>
