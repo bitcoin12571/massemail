@@ -13,9 +13,10 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { File, Image, Paperclip, Search, Send, Sparkles, UsersRound, X } from 'lucide-react';
+import { Eye, File, Image, Paperclip, Search, Send, Sparkles, UsersRound, X } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
+import { EmailPreviewModalCompose } from '../components/EmailPreviewModalCompose.jsx';
 
 export default function SendEmail({ onOpenSettings }) {
   const { language, t } = useLanguage();
@@ -29,6 +30,7 @@ export default function SendEmail({ onOpenSettings }) {
   const [improving, setImproving] = useState(false);
   const [notice, setNotice] = useState(null);
   const [deliveryMode, setDeliveryMode] = useState('preview');
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     API.get('/settings/email')
@@ -196,14 +198,24 @@ export default function SendEmail({ onOpenSettings }) {
                 <Typography fontWeight={750}>{t('aiImproveTitle')}</Typography>
                 <Typography variant="body2" color="text.secondary">{t('aiImproveHelp')}</Typography>
               </Box>
-              <Button
-                variant="outlined"
-                startIcon={<Sparkles size={17} />}
-                disabled={improving || sending || !message.trim()}
-                onClick={improveWithAI}
-              >
-                {improving ? t('aiImproving') : t('aiImprove')}
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<Eye size={17} />}
+                  disabled={sending || !subject.trim() || !message.trim() || !selected.length}
+                  onClick={() => setPreviewOpen(true)}
+                >
+                  {t('preview') || 'Preview'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<Sparkles size={17} />}
+                  disabled={improving || sending || !message.trim()}
+                  onClick={improveWithAI}
+                >
+                  {improving ? t('aiImproving') : t('aiImprove')}
+                </Button>
+              </Box>
             </Box>
             <Box className="attachment-box">
               <Box>
@@ -246,6 +258,19 @@ export default function SendEmail({ onOpenSettings }) {
           </Box>
         </Paper>
       </Box>
+
+      <EmailPreviewModalCompose
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        subject={subject}
+        htmlContent={`<div style="font-family:Arial,sans-serif;line-height:1.6">${message
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll('\n', '<br>')}</div>`}
+        selectedContacts={selectedContacts}
+      />
 
       <Snackbar open={Boolean(notice)} autoHideDuration={5000} onClose={() => setNotice(null)}>
         {notice && <Alert severity={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}
