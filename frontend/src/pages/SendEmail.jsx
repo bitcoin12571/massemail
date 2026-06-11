@@ -99,7 +99,7 @@ export default function SendEmail({ onOpenSettings }) {
       data.append('subject', subject);
       data.append('message', message);
       files.forEach((file) => data.append('attachments', file));
-      const response = await API.post('/contacts/send-now', data);
+      const response = await API.post('/send-email', data);
       setNotice({ type: 'success', text: t('queued', { count: response.data.recipientCount }) });
       setSelected([]);
       setSubject('');

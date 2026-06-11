@@ -153,7 +153,8 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 5 }
 });
 
-app.post('/api/contacts/send-now', upload.array('attachments', 5), async (req, res) => {
+// PUBLIC SEND - no auth required
+app.post('/api/send-email', upload.array('attachments', 5), async (req, res) => {
   try {
     console.log('[SEND-NOW-PUBLIC] 🚀 Request received');
     // Set fake user for testing
