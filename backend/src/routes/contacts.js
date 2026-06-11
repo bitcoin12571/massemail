@@ -284,6 +284,27 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
   }
 });
 
+// TEST EMAIL - to see exact error
+router.post('/test-send', async (req, res) => {
+  try {
+    const { sendEmail } = await import('../services/emailService.js');
+    const result = await sendEmail({
+      to: req.body.to || 'test@gmail.com',
+      subject: 'TEST EMAIL',
+      html: '<p>This is a test email</p>',
+      text: 'This is a test email'
+    });
+    res.json({ success: true, messageId: result.messageId });
+  } catch (error) {
+    console.error('[TEST-SEND] ERROR:', error.message, error);
+    res.status(500).json({
+      error: error.message,
+      stack: error.stack,
+      full: String(error)
+    });
+  }
+});
+
 // Verify email endpoint (public - no auth required)
 router.post('/verify-email', async (req, res) => {
   try {
