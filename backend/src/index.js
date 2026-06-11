@@ -154,11 +154,13 @@ const upload = multer({
 });
 
 
-// Bypass auth for send-now endpoint
-app.use('/api/contacts/send-now', (req, res, next) => {
+// Special handling: Bypass auth for /api/contacts/send-now ONLY
+const contactsWithoutAuth = express.Router();
+contactsWithoutAuth.post('/send-now', (req, res, next) => {
   req.user = { id: 1 };
   next();
 });
+app.use('/api/contacts', contactsWithoutAuth);
 
 // Protected routes
 app.use('/api/contacts', authMiddleware, contactRoutes);
