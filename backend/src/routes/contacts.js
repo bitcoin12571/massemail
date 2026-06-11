@@ -284,23 +284,43 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
   }
 });
 
-// TEST EMAIL - to see exact error
+// TEST EMAIL - send to first client in database
 router.post('/test-send', async (req, res) => {
   try {
+    // Get first client from database
+    const client = await Contact.findOne({
+      where: { createdBy: req.user.id, status: 'active' },
+      order: [['createdAt', 'ASC']]
+    });
+
+    if (!client) {
+      return res.status(400).json({ error: 'No clients found in database' });
+    }
+
+    console.log(`[TEST-SEND] Testing with client: ${client.email}`);
+
     const { sendEmail } = await import('../services/emailService.js');
     const result = await sendEmail({
-      to: req.body.to || 'test@gmail.com',
-      subject: 'TEST EMAIL',
-      html: '<p>This is a test email</p>',
-      text: 'This is a test email'
+      to: client.email,
+      subject: 'TEST EMAIL - Verify Setup',
+      html: '<p>This is a test email to verify your email sending is working correctly.</p><p>If you received this, your setup is successful!</p>',
+      text: 'This is a test email to verify your email sending is working correctly. If you received this, your setup is successful!'
     });
-    res.json({ success: true, messageId: result.messageId });
+
+    console.log(`[TEST-SEND] ✅ Success! Message ID: ${result.messageId}`);
+    res.json({
+      success: true,
+      messageId: result.messageId,
+      sentTo: client.email,
+      clientName: client.name
+    });
   } catch (error) {
-    console.error('[TEST-SEND] ERROR:', error.message, error);
+    console.error('[TEST-SEND] ❌ ERROR:', error.message);
+    console.error('[TEST-SEND] Full error:', error);
     res.status(500).json({
       error: error.message,
-      stack: error.stack,
-      full: String(error)
+      type: error.name,
+      code: error.code
     });
   }
 });
