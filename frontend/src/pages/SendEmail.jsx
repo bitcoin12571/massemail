@@ -245,7 +245,7 @@ export default function SendEmail({ onOpenSettings }) {
               disabled={sending || !selected.length || !subject.trim() || !message.trim()}
               onClick={send}
             >
-              {sending ? t('sending') : t('sendToCount', { count: selected.length })}
+              {sending ? t('sending') : selected.length === 1 ? 'Trimite acum la 1 client' : t('sendToCount', { count: selected.length })}
             </Button>
           </Box>
         </Paper>

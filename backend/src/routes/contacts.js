@@ -225,16 +225,39 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
       createdBy: req.user.id
     });
 
+    // Send emails immediately (not queued, since queue doesn't persist in Vercel)
+    const { sendEmail } = await import('../services/emailService.js');
+
     for (const contact of contacts) {
       const email = await Email.create({
         campaignId: campaign.id,
         contactId: contact.id,
         recipientEmail: contact.email
       });
-      await emailQueue.add({
-        emailId: email.id,
-        campaignId: campaign.id,
-        contactId: contact.id
+
+      // Send immediately in background
+      sendEmail({
+        to: contact.email,
+        subject: subject.trim(),
+        html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
+        text: message.trim(),
+        attachments: (req.files || []).map((file) => ({
+          filename: file.originalname,
+          contentType: file.mimetype,
+          content: file.buffer.toString('base64')
+        }))
+      }).then(result => {
+        email.update({
+          status: 'sent',
+          sentAt: new Date(),
+          sendgridMessageId: result.messageId
+        }).catch(err => console.error('Failed to update email:', err));
+      }).catch(err => {
+        console.error(`Failed to send email to ${contact.email}:`, err);
+        email.update({
+          status: 'failed',
+          failureReason: err.message || 'Send failed'
+        }).catch(e => console.error('Failed to update status:', e));
       });
     }
 
