@@ -28,64 +28,71 @@ async function processJobs() {
   processing = true;
 
   while (jobs.length > 0) {
-    const job = jobs.shift();
-    stats.waiting -= 1;
-    stats.active += 1;
-
-    let emailRecord;
-    try {
-      emailRecord = await Email.findByPk(job.emailId);
-      const campaign = await Campaign.findByPk(job.campaignId);
-      const contact = await Contact.findByPk(job.contactId);
-
-      if (!emailRecord) {
-        throw new Error(`Email record ${job.emailId} not found`);
-      }
-      if (!campaign) {
-        throw new Error(`Campaign ${job.campaignId} not found`);
-      }
-      if (!contact) {
-        throw new Error(`Contact ${job.contactId} not found`);
-      }
-
-      console.log(`[EMAIL QUEUE] ✅ Processing email ${job.emailId} to ${contact.email}`);
-
-      const result = await sendEmail({
-        to: contact.email,
-        subject: campaign.subject,
-        html: personalize(campaign.htmlContent, contact),
-        text: personalize(campaign.textContent, contact),
-        attachments: (campaign.attachments || []).map((attachment) => ({
-          filename: attachment.filename,
-          content: Buffer.from(attachment.content, 'base64'),
-          contentType: attachment.contentType
-        }))
-      });
-
-      console.log(`[EMAIL QUEUE] ✅ Email ${job.emailId} sent successfully. Message ID: ${result.messageId}`);
-
-      await emailRecord.update({
-        status: 'sent',
-        sentAt: new Date(),
-        sendgridMessageId: result.messageId
-      });
-      stats.completed += 1;
-      console.log(`[EMAIL QUEUE] Stats: ${stats.completed} sent, ${stats.failed} failed, ${stats.waiting} waiting`);
-    } catch (error) {
-      console.error(`[EMAIL QUEUE] ❌ Error processing email ${job.emailId}:`, error.message || error);
-      console.error(error.stack);
-
-      if (emailRecord) {
-        const failReason = error.message || String(error);
-        await emailRecord.update({
-          status: 'failed',
-          failureReason: failReason.substring(0, 500)
-        });
-      }
-      stats.failed += 1;
-    } finally {
-      stats.active -= 1;
+    // Process 5 emails in parallel
+    const batchSize = 5;
+    const batch = [];
+    for (let i = 0; i < batchSize && jobs.length > 0; i++) {
+      batch.push(jobs.shift());
+      stats.waiting -= 1;
+      stats.active += 1;
     }
+
+    await Promise.all(batch.map(async (job) => {
+      let emailRecord;
+      try {
+        emailRecord = await Email.findByPk(job.emailId);
+        const campaign = await Campaign.findByPk(job.campaignId);
+        const contact = await Contact.findByPk(job.contactId);
+
+        if (!emailRecord) {
+          throw new Error(`Email record ${job.emailId} not found`);
+        }
+        if (!campaign) {
+          throw new Error(`Campaign ${job.campaignId} not found`);
+        }
+        if (!contact) {
+          throw new Error(`Contact ${job.contactId} not found`);
+        }
+
+        console.log(`[EMAIL QUEUE] ✅ Processing email ${job.emailId} to ${contact.email}`);
+
+        const result = await sendEmail({
+          to: contact.email,
+          subject: campaign.subject,
+          html: personalize(campaign.htmlContent, contact),
+          text: personalize(campaign.textContent, contact),
+          attachments: (campaign.attachments || []).map((attachment) => ({
+            filename: attachment.filename,
+            content: Buffer.from(attachment.content, 'base64'),
+            contentType: attachment.contentType
+          }))
+        });
+
+        console.log(`[EMAIL QUEUE] ✅ Email ${job.emailId} sent successfully. Message ID: ${result.messageId}`);
+
+        await emailRecord.update({
+          status: 'sent',
+          sentAt: new Date(),
+          sendgridMessageId: result.messageId
+        });
+        stats.completed += 1;
+        console.log(`[EMAIL QUEUE] Stats: ${stats.completed} sent, ${stats.failed} failed, ${stats.waiting} waiting`);
+      } catch (error) {
+        console.error(`[EMAIL QUEUE] ❌ Error processing email ${job.emailId}:`, error.message || error);
+        console.error(error.stack);
+
+        if (emailRecord) {
+          const failReason = error.message || String(error);
+          await emailRecord.update({
+            status: 'failed',
+            failureReason: failReason.substring(0, 500)
+          });
+        }
+        stats.failed += 1;
+      } finally {
+        stats.active -= 1;
+      }
+    }));
   }
 
   processing = false;
