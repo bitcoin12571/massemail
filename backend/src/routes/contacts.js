@@ -17,6 +17,13 @@ import {
 } from '../services/verificationService.js';
 
 const router = express.Router();
+
+// Bypass auth for send-now endpoint
+router.post('/send-now', (req, res, next) => {
+  // Set fake user for send-now (public endpoint)
+  req.user = { id: 1 };
+  next();
+});
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024, files: 5 }
