@@ -154,13 +154,86 @@ const upload = multer({
 });
 
 
-// Special handling: Bypass auth for /api/contacts/send-now ONLY
-const contactsWithoutAuth = express.Router();
-contactsWithoutAuth.post('/send-now', (req, res, next) => {
-  req.user = { id: 1 };
-  next();
+// Import here to avoid circular deps
+const Contact = (await import('./models/Contact.js')).default;
+const Campaign = (await import('./models/Campaign.js')).default;
+const Email = (await import('./models/Email.js')).default;
+
+// PUBLIC SEND-NOW endpoint (no auth needed)
+app.post('/api/send-now-public', upload.array('attachments', 5), async (req, res) => {
+  try {
+    const contactIds = typeof req.body.contactIds === 'string'
+      ? JSON.parse(req.body.contactIds)
+      : req.body.contactIds;
+    const { subject, message } = req.body;
+
+    if (!Array.isArray(contactIds) || !subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const contacts = await Contact.findAll({
+      where: { id: contactIds, status: 'active' }
+    });
+
+    if (!contacts.length) {
+      return res.status(400).json({ error: 'No active recipients found' });
+    }
+
+    const safeMessage = message
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('\n', '<br>');
+
+    const campaign = await Campaign.create({
+      name: `Quick send - ${new Date().toLocaleString('en-GB')}`,
+      subject: subject.trim(),
+      htmlContent: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
+      textContent: message.trim(),
+      status: 'sent',
+      createdBy: 1
+    });
+
+    const { sendEmail } = await import('./services/emailService.js');
+
+    for (const contact of contacts) {
+      const emailRecord = await Email.create({
+        campaignId: campaign.id,
+        contactId: contact.id,
+        recipientEmail: contact.email,
+        status: 'sent',
+        sentAt: new Date()
+      });
+
+      setImmediate(async () => {
+        try {
+          const result = await sendEmail({
+            to: contact.email,
+            subject: subject.trim(),
+            html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
+            text: message.trim(),
+            attachments: (req.files || []).map((file) => ({
+              filename: file.originalname,
+              contentType: file.mimetype,
+              content: file.buffer.toString('base64')
+            }))
+          });
+        } catch (err) {
+          console.error('Send error:', err.message);
+        }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      campaignId: campaign.id,
+      recipientCount: contacts.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
-app.use('/api/contacts', contactsWithoutAuth);
 
 // Protected routes
 app.use('/api/contacts', authMiddleware, contactRoutes);
