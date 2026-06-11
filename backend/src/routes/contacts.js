@@ -258,6 +258,9 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
             sentAt: new Date(),
             sendgridMessageId: result.messageId
           });
+
+          // Update campaign status to sent when first email completes
+          await campaign.update({ status: 'sent' });
         } catch (err) {
           // Silent failure - just update status
           await email.update({
