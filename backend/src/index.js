@@ -107,6 +107,45 @@ app.post('/api/debug/test-email', async (req, res) => {
   }
 });
 
+// PUBLIC SEND - test endpoint without auth requirement
+app.post('/api/public/send', upload.array('attachments', 5), async (req, res) => {
+  try {
+    console.log('[PUBLIC-SEND] 🚀 PUBLIC SEND TEST');
+    const { to, subject, message } = req.body;
+
+    if (!to || !subject || !message) {
+      return res.status(400).json({ error: 'Missing to, subject, or message' });
+    }
+
+    const { sendEmail } = await import('./services/emailService.js');
+
+    const result = await sendEmail({
+      to,
+      subject,
+      html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${message}</div>`,
+      text: message,
+      attachments: (req.files || []).map((file) => ({
+        filename: file.originalname,
+        contentType: file.mimetype,
+        content: file.buffer.toString('base64')
+      }))
+    });
+
+    console.log('[PUBLIC-SEND] ✅ SUCCESS! Message ID:', result.messageId);
+    res.json({
+      success: true,
+      messageId: result.messageId,
+      sentTo: to
+    });
+  } catch (error) {
+    console.error('[PUBLIC-SEND] ❌ FAILED:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Protected routes
 app.use('/api/contacts', authMiddleware, contactRoutes);
 app.use('/api/campaigns', authMiddleware, campaignRoutes);
