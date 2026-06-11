@@ -68,48 +68,41 @@ app.use(async (req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
-// FORCE SEND - test endpoint without auth (DEBUG ONLY)
-app.post('/api/debug/force-send', async (req, res) => {
+// DEBUG TEST EMAIL - send directly to hardcoded email without requiring database
+app.post('/api/debug/test-email', async (req, res) => {
   try {
-    console.log('[FORCE-SEND] 🚀 Starting force send test...');
+    console.log('[DEBUG-TEST] 🚀 SENDING DIRECT TEST EMAIL...');
+    console.log('[DEBUG-TEST] Provider:', process.env.EMAIL_PROVIDER);
+    console.log('[DEBUG-TEST] SMTP User:', process.env.SMTP_USER);
+    console.log('[DEBUG-TEST] Has password:', !!process.env.SMTP_PASS);
 
-    const Contact = (await import('./models/Contact.js')).default;
     const { sendEmail } = await import('./services/emailService.js');
 
-    // Find FIRST contact regardless of user
-    const contact = await Contact.findOne({
-      order: [['createdAt', 'ASC']]
-    });
-
-    if (!contact) {
-      console.log('[FORCE-SEND] ❌ No contacts found in database');
-      return res.status(400).json({ error: 'No contacts in database' });
-    }
-
-    console.log(`[FORCE-SEND] ✅ Found contact: ${contact.email}`);
-
     const result = await sendEmail({
-      to: contact.email,
-      subject: 'FORCE TEST EMAIL',
-      html: '<p><strong>FORCE TEST - If you see this, email sending WORKS!</strong></p>',
-      text: 'FORCE TEST - If you see this, email sending WORKS!'
+      to: 'maximplacinta589@gmail.com',
+      subject: '✅ TEST EMAIL FROM VERCEL - ' + new Date().toISOString(),
+      html: '<p><strong>🎉 THIS EMAIL IS FROM VERCEL!</strong></p><p>If you see this, the Gmail SMTP connection WORKS!</p><p>Time: ' + new Date().toISOString() + '</p>',
+      text: 'TEST EMAIL FROM VERCEL - If you see this, Gmail SMTP works!'
     });
 
-    console.log('[FORCE-SEND] ✅ Email sent! Message ID:', result.messageId);
+    console.log('[DEBUG-TEST] ✅ EMAIL SENT! Message ID:', result.messageId);
     res.json({
       success: true,
-      sentTo: contact.email,
       messageId: result.messageId,
-      message: 'Test email sent successfully!'
+      sentTo: 'maximplacinta589@gmail.com',
+      message: '✅ Test email sent successfully to maximplacinta589@gmail.com! Check your inbox!',
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('[FORCE-SEND] ❌ FAILED:', error.message);
-    console.error('[FORCE-SEND] FULL ERROR:', error);
+    console.error('[DEBUG-TEST] ❌ FAILED:', error.message);
+    console.error('[DEBUG-TEST] ERROR CODE:', error.code);
+    console.error('[DEBUG-TEST] FULL ERROR:', error);
     res.status(500).json({
+      success: false,
       error: error.message,
       code: error.code,
       type: error.name,
-      fullError: error.toString()
+      timestamp: new Date().toISOString()
     });
   }
 });
