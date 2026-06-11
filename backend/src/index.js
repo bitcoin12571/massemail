@@ -68,6 +68,34 @@ app.use(async (req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
+// DEBUG: Force send endpoint (no auth - for testing only)
+app.post('/api/contacts/force-send', async (req, res) => {
+  try {
+    console.log('\n[FORCE-SEND] 🚀 Testing email sending...');
+    const Contact = (await import('./models/Contact.js')).default;
+    const { sendEmail } = await import('./services/emailService.js');
+
+    const contact = await Contact.findOne({ order: [['createdAt', 'ASC']] });
+    if (!contact) {
+      return res.status(400).json({ error: 'No contacts in database' });
+    }
+
+    console.log(`[FORCE-SEND] Found contact: ${contact.email}`);
+    const result = await sendEmail({
+      to: contact.email,
+      subject: 'FORCE TEST EMAIL',
+      html: '<p><strong>FORCE TEST - Email sending works!</strong></p>',
+      text: 'FORCE TEST - Email sending works!'
+    });
+
+    console.log('[FORCE-SEND] ✅ Success! Message ID:', result.messageId);
+    res.json({ success: true, sentTo: contact.email, messageId: result.messageId });
+  } catch (error) {
+    console.error('[FORCE-SEND] ❌ Error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Protected routes
 app.use('/api/contacts', authMiddleware, contactRoutes);
 app.use('/api/campaigns', authMiddleware, campaignRoutes);
