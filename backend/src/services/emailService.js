@@ -214,6 +214,7 @@ export async function sendEmail(emailData) {
     // Process attachments: images as inline, files as attachments
     const inlineImages = [];
     const fileAttachments = [];
+    let imageTags = '';
 
     if (emailData.attachments) {
       emailData.attachments.forEach((att, idx) => {
@@ -225,6 +226,8 @@ export async function sendEmail(emailData) {
             contentType: att.contentType,
             cid: `image_${idx}@campaign`
           });
+          // Add image tag to display in email
+          imageTags += `<div style="margin-top: 20px;"><img src="cid:image_${idx}@campaign" style="max-width: 100%; height: auto; border-radius: 8px;" /></div>`;
         } else {
           fileAttachments.push({
             filename: att.filename,
@@ -235,12 +238,11 @@ export async function sendEmail(emailData) {
       });
     }
 
-    // Replace image references in HTML with inline CIDs
+    // Add images to HTML content at the end
     let htmlContent = emailData.personalizedHtml || emailData.html;
-    inlineImages.forEach((img, idx) => {
-      const imgTag = `<img src="cid:image_${idx}@campaign" style="max-width: 100%; height: auto;" />`;
-      htmlContent = htmlContent.replace(/\[image\]|\{image\}/gi, imgTag);
-    });
+    if (imageTags) {
+      htmlContent += imageTags;
+    }
 
     const result = await transporter.sendMail({
       from: `"${settings.senderName}" <${settings.senderEmail}>`,
