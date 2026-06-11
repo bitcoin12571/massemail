@@ -6,12 +6,13 @@ import {
   Paper,
   Snackbar,
   Alert,
+  TextField,
   Typography,
   FormControlLabel,
   Switch,
   Stack
 } from '@mui/material';
-import { Gauge } from 'lucide-react';
+import { Gauge, Send } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { useUserPreferences } from '../contexts/UserPreferencesContext';
@@ -221,6 +222,32 @@ export default function SystemSettings() {
         </Paper>
       </motion.div>
 
+      <Box className="simple-settings-grid">
+        <Paper className="settings-panel">
+          <Box className="settings-section-title">
+            <Box className="settings-icon"><Send size={20} /></Box>
+            <Box>
+              <Typography variant="h6">{t('testEmailTitle')}</Typography>
+              <Typography variant="body2" color="text.secondary">{t('testEmailHelp')}</Typography>
+            </Box>
+          </Box>
+          <Box className="settings-fields">
+            <TextField label={t('testRecipient')} type="email" value={testEmail.to} onChange={changeTest('to')} />
+            <TextField label={t('subject')} value={testEmail.subject} onChange={changeTest('subject')} />
+            <TextField label={t('message')} multiline minRows={5} value={testEmail.message} onChange={changeTest('message')} />
+          </Box>
+          <Box className="settings-actions">
+            <Button
+              variant="contained"
+              startIcon={<Send size={17} />}
+              disabled={busy || !testEmail.to || !testEmail.subject || !testEmail.message}
+              onClick={sendTest}
+            >
+              {t('sendTestEmail')}
+            </Button>
+          </Box>
+        </Paper>
+      </Box>
 
       <Snackbar open={Boolean(notice)} autoHideDuration={5000} onClose={() => setNotice(null)}>
         {notice && <Alert severity={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}

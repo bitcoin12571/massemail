@@ -136,7 +136,7 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
   try {
     if (!isRealEmailDeliveryConfigured()) {
       return res.status(409).json({
-        error: 'Configure Gmail or Outlook in System settings before sending real emails.'
+        error: 'Trimiterea reală nu este configurată. Conectează Gmail sau Outlook înainte de a expedia.'
       });
     }
 
