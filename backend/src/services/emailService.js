@@ -165,11 +165,14 @@ export async function verifyEmailConnection() {
 }
 
 export async function sendEmail(emailData) {
+  console.log('[EMAIL SERVICE] Starting sendEmail');
+  console.log('[EMAIL SERVICE] Provider:', process.env.EMAIL_PROVIDER);
+  console.log('[EMAIL SERVICE] Has SMTP_PASS:', !!process.env.SMTP_PASS);
+
   // Reinitialize transporter each time to handle Gmail connection issues
   await initializeEmailService();
 
-  // Minimal logging for speed
-  // console.log(`[EMAIL SERVICE] Sending to ${emailData.to}`);
+  console.log('[EMAIL SERVICE] After init, settings.provider:', settings.provider);
 
   // Use Resend if provider is resend
   if (settings.provider === 'resend' && resendClient) {
