@@ -15,13 +15,11 @@ import {
   LogOut,
   MailPlus,
   Menu,
-  Search,
-  Settings
+  Search
 } from 'lucide-react';
 import CampaignDashboard from './CampaignDashboard';
 import QueueMonitor from '../components/QueueMonitor';
 import ContactsManager from './ContactsManager';
-import SystemSettings from './SystemSettings';
 import SendEmail from './SendEmail';
 import { useLanguage } from '../i18n.jsx';
 import { pageTransition } from '../utils/animations';
@@ -74,16 +72,6 @@ export default function Dashboard({ user, onLogout }) {
         </Stack>
 
         <Box className="sidebar-spacer" />
-        <Button
-          className={`nav-item ${activePage === 4 ? 'active' : ''}`}
-          startIcon={<Settings size={19} />}
-          onClick={() => {
-            setActivePage(4);
-            setMobileNav(false);
-          }}
-        >
-          {t('systemSettings')}
-        </Button>
 
         <Box className="profile-card">
           <Avatar sx={{ width: 38, height: 38, bgcolor: '#d9f6ea', color: '#087a55' }}>AM</Avatar>
@@ -158,17 +146,6 @@ export default function Dashboard({ user, onLogout }) {
                 variants={pageTransition}
               >
                 <QueueMonitor />
-              </motion.div>
-            )}
-            {activePage === 4 && (
-              <motion.div
-                key="settings"
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                variants={pageTransition}
-              >
-                <SystemSettings />
               </motion.div>
             )}
           </AnimatePresence>

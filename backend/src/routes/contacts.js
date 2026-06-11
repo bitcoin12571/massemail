@@ -134,12 +134,6 @@ router.post('/import', async (req, res) => {
 
 router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
   try {
-    if (!isRealEmailDeliveryConfigured()) {
-      return res.status(409).json({
-        error: 'Trimiterea reală nu este configurată. Conectează Gmail sau Outlook înainte de a expedia.'
-      });
-    }
-
     const contactIds = typeof req.body.contactIds === 'string'
       ? JSON.parse(req.body.contactIds)
       : req.body.contactIds;
