@@ -204,12 +204,13 @@ export async function sendEmail(emailData) {
 
   // Fall back to Nodemailer for other providers (Gmail, Outlook, SendGrid, SMTP, etc.)
   try {
-    console.log(`[EMAIL SERVICE] Using Nodemailer (${settings.provider}) to send email`);
-    console.log(`[EMAIL SERVICE] Transporter config: ${JSON.stringify({
-      provider: settings.provider,
-      user: settings.smtpUser,
-      hasPassword: !!settings.smtpPassword
-    }, null, 2)}`);
+    console.log(`[EMAIL SERVICE] 🚀 ATTEMPTING TO SEND EMAIL`);
+    console.log(`[EMAIL SERVICE] Provider: ${settings.provider}`);
+    console.log(`[EMAIL SERVICE] From: ${settings.senderEmail}`);
+    console.log(`[EMAIL SERVICE] To: ${emailData.to}`);
+    console.log(`[EMAIL SERVICE] Subject: ${emailData.subject}`);
+    console.log(`[EMAIL SERVICE] SMTP User: ${settings.smtpUser}`);
+    console.log(`[EMAIL SERVICE] Has Password: ${!!settings.smtpPassword}`);
 
     // Process attachments: images as inline, files as attachments
     const inlineImages = [];
