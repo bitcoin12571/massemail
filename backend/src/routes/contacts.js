@@ -134,6 +134,15 @@ router.post('/import', async (req, res) => {
 
 router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
   try {
+    console.log('\n\n[SEND-NOW] ================================================');
+    console.log('[SEND-NOW] 📧 SEND EMAIL REQUEST');
+    console.log('[SEND-NOW] User ID:', req.user?.id);
+    console.log('[SEND-NOW] Body contactIds:', req.body.contactIds);
+    console.log('[SEND-NOW] Body recipients:', req.body.recipients?.length);
+    console.log('[SEND-NOW] Subject:', req.body.subject);
+    console.log('[SEND-NOW] Message length:', req.body.message?.length);
+    console.log('[SEND-NOW] Files:', req.files?.length);
+
     const contactIds = typeof req.body.contactIds === 'string'
       ? JSON.parse(req.body.contactIds)
       : req.body.contactIds;
@@ -141,10 +150,16 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
       ? JSON.parse(req.body.recipients)
       : req.body.recipients;
     const { subject, message } = req.body;
+
+    console.log('[SEND-NOW] Parsed contactIds:', contactIds);
+    console.log('[SEND-NOW] Parsed recipientSnapshots count:', recipientSnapshots?.length);
+
     if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      console.log('[SEND-NOW] ❌ No contact IDs provided');
       return res.status(400).json({ error: 'Select at least one recipient' });
     }
     if (!subject?.trim() || !message?.trim()) {
+      console.log('[SEND-NOW] ❌ Missing subject or message');
       return res.status(400).json({ error: 'Subject and message are required' });
     }
 
