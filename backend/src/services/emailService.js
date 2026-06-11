@@ -165,13 +165,22 @@ export async function verifyEmailConnection() {
 }
 
 export async function sendEmail(emailData) {
-  if (!transporter) await initializeEmailService();
+  // Always reinitialize to get fresh config
+  if (!settings.provider || settings.provider === 'preview') {
+    await initializeEmailService();
+  }
+  if (!transporter) {
+    await initializeEmailService();
+  }
 
   console.log(`\n[EMAIL SERVICE] ================================`);
   console.log(`[EMAIL SERVICE] 📧 Sending email via ${settings.provider}`);
   console.log(`[EMAIL SERVICE] To: ${emailData.to}`);
   console.log(`[EMAIL SERVICE] Subject: ${emailData.subject}`);
   console.log(`[EMAIL SERVICE] From: "${settings.senderName}" <${settings.senderEmail}>`);
+  console.log(`[EMAIL SERVICE] Provider: ${settings.provider}`);
+  console.log(`[EMAIL SERVICE] SMTP Host: ${settings.smtpHost}`);
+  console.log(`[EMAIL SERVICE] SMTP User: ${settings.smtpUser}`);
   console.log(`[EMAIL SERVICE] ================================\n`);
 
   // Use Resend if provider is resend
