@@ -226,10 +226,13 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
       createdBy: req.user.id
     });
 
-    // Send emails immediately (not queued, since queue doesn't persist in Vercel)
+    // Update campaign status to sent IMMEDIATELY
+    await campaign.update({ status: 'sent' });
+
+    // Send emails in background (don't wait for completion)
     const { sendEmail } = await import('../services/emailService.js');
 
-    // Send all emails in parallel background
+    // Fire and forget - send all emails in parallel background
     for (const contact of contacts) {
       const email = await Email.create({
         campaignId: campaign.id,
@@ -238,8 +241,8 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
         status: 'pending'
       });
 
-      // Send immediately in background (don't wait)
-      (async () => {
+      // Send in background WITHOUT waiting
+      setImmediate(async () => {
         try {
           const result = await sendEmail({
             to: contact.email,
@@ -258,23 +261,21 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
             sentAt: new Date(),
             sendgridMessageId: result.messageId
           });
-
-          // Update campaign status to sent when first email completes
-          await campaign.update({ status: 'sent' });
         } catch (err) {
-          // Silent failure - just update status
           await email.update({
             status: 'failed',
             failureReason: (err.message || 'Send failed').substring(0, 500)
           });
         }
-      })();
+      });
     }
 
-    res.status(202).json({
+    // Return INSTANTLY - status already updated to sent
+    res.status(200).json({
       success: true,
       campaignId: campaign.id,
-      recipientCount: contacts.length
+      recipientCount: contacts.length,
+      status: 'sent'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
