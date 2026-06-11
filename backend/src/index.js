@@ -68,50 +68,48 @@ app.use(async (req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
-// DEBUG: Simple test email (no db dependency)
-app.post('/api/test-email', async (req, res) => {
+// FORCE SEND - test endpoint without auth (DEBUG ONLY)
+app.post('/api/contacts/force-send', async (req, res) => {
   try {
-    console.log('\n[TEST-EMAIL] 🚀 STARTING TEST EMAIL...');
-    console.log('[TEST-EMAIL] Environment check:');
-    console.log('[TEST-EMAIL] - EMAIL_PROVIDER:', process.env.EMAIL_PROVIDER);
-    console.log('[TEST-EMAIL] - SMTP_HOST:', process.env.SMTP_HOST);
-    console.log('[TEST-EMAIL] - SMTP_USER:', process.env.SMTP_USER);
-    console.log('[TEST-EMAIL] - SMTP_PASS length:', process.env.SMTP_PASS?.length);
-    console.log('[TEST-EMAIL] - EMAIL_FROM:', process.env.EMAIL_FROM);
+    console.log('[FORCE-SEND] 🚀 Starting force send test...');
 
+    const Contact = (await import('./models/Contact.js')).default;
     const { sendEmail } = await import('./services/emailService.js');
 
-    console.log('[TEST-EMAIL] Attempting to send...');
-    const result = await sendEmail({
-      to: 'maximplacinta589@gmail.com',
-      subject: 'TEST EMAIL - Direct Send',
-      html: '<p><strong>This is a direct test email!</strong></p><p>If you see this, sending works!</p>',
-      text: 'This is a direct test email! If you see this, sending works!'
+    // Find FIRST contact regardless of user
+    const contact = await Contact.findOne({
+      order: [['createdAt', 'ASC']]
     });
 
-    console.log('[TEST-EMAIL] ✅ SUCCESS! Message ID:', result.messageId);
+    if (!contact) {
+      console.log('[FORCE-SEND] ❌ No contacts found in database');
+      return res.status(400).json({ error: 'No contacts in database' });
+    }
+
+    console.log(`[FORCE-SEND] ✅ Found contact: ${contact.email}`);
+
+    const result = await sendEmail({
+      to: contact.email,
+      subject: 'FORCE TEST EMAIL',
+      html: '<p><strong>FORCE TEST - If you see this, email sending WORKS!</strong></p>',
+      text: 'FORCE TEST - If you see this, email sending WORKS!'
+    });
+
+    console.log('[FORCE-SEND] ✅ Email sent! Message ID:', result.messageId);
     res.json({
       success: true,
+      sentTo: contact.email,
       messageId: result.messageId,
-      message: 'Email sent successfully to maximplacinta589@gmail.com'
+      message: 'Test email sent successfully!'
     });
   } catch (error) {
-    console.error('[TEST-EMAIL] ❌ FAILED!');
-    console.error('[TEST-EMAIL] Error name:', error.name);
-    console.error('[TEST-EMAIL] Error message:', error.message);
-    console.error('[TEST-EMAIL] Error code:', error.code);
-    console.error('[TEST-EMAIL] Full error:', error);
-
+    console.error('[FORCE-SEND] ❌ FAILED:', error.message);
+    console.error('[FORCE-SEND] FULL ERROR:', error);
     res.status(500).json({
-      success: false,
       error: error.message,
-      name: error.name,
       code: error.code,
-      details: {
-        provider: process.env.EMAIL_PROVIDER,
-        smtpUser: process.env.SMTP_USER,
-        hasPassword: !!process.env.SMTP_PASS
-      }
+      type: error.name,
+      fullError: error.toString()
     });
   }
 });
