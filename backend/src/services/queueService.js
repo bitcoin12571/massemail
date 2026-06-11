@@ -28,8 +28,8 @@ async function processJobs() {
   processing = true;
 
   while (jobs.length > 0) {
-    // Process 5 emails in parallel
-    const batchSize = 5;
+    // Process 10 emails in parallel for faster sending
+    const batchSize = 10;
     const batch = [];
     for (let i = 0; i < batchSize && jobs.length > 0; i++) {
       batch.push(jobs.shift());
@@ -37,12 +37,19 @@ async function processJobs() {
       stats.active += 1;
     }
 
-    await Promise.all(batch.map(async (job) => {
+    await Promise.allSettled(batch.map(async (job) => {
       let emailRecord;
       try {
-        emailRecord = await Email.findByPk(job.emailId);
-        const campaign = await Campaign.findByPk(job.campaignId);
-        const contact = await Contact.findByPk(job.contactId);
+        // Fetch all data in parallel for speed
+        const [emailRec, camp, cont] = await Promise.all([
+          Email.findByPk(job.emailId),
+          Campaign.findByPk(job.campaignId),
+          Contact.findByPk(job.contactId)
+        ]);
+
+        emailRecord = emailRec;
+        const campaign = camp;
+        const contact = cont;
 
         if (!emailRecord) {
           throw new Error(`Email record ${job.emailId} not found`);
