@@ -165,10 +165,7 @@ export async function verifyEmailConnection() {
 }
 
 export async function sendEmail(emailData) {
-  // Always reinitialize to get fresh config
-  if (!settings.provider || settings.provider === 'preview') {
-    await initializeEmailService();
-  }
+  // Reuse transporter - no reinit needed for speed
   if (!transporter) {
     await initializeEmailService();
   }
