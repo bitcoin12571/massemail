@@ -108,9 +108,16 @@ export default function CampaignDashboard({ onOpenDatabase }) {
 
   const deleteCampaign = async (campaign) => {
     if (!window.confirm(`Delete "${campaign.name}"?`)) return;
-    await API.delete(`/campaigns/${campaign.id}`);
-    setNotice({ type: 'success', text: 'Campaign deleted' });
-    refresh();
+    setLoading(true);
+    try {
+      await API.delete(`/campaigns/${campaign.id}`);
+      setNotice({ type: 'success', text: 'Campaign deleted' });
+      refresh();
+    } catch (error) {
+      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not delete campaign') });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const statCards = [
