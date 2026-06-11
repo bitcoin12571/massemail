@@ -3,16 +3,16 @@ import { Resend } from 'resend';
 import SystemSetting from '../models/SystemSetting.js';
 
 const defaults = {
-  provider: 'preview',
-  senderName: 'Company Mail Center',
-  senderEmail: 'noreply@company.local',
-  smtpHost: '',
+  provider: process.env.EMAIL_PROVIDER || 'preview',
+  senderName: process.env.SENDER_NAME || 'Company Mail Center',
+  senderEmail: process.env.EMAIL_FROM || 'info29730@gmail.com',
+  smtpHost: process.env.SMTP_HOST || '',
   smtpPort: 587,
   smtpSecure: false,
-  smtpUser: '',
-  smtpPassword: '',
-  sendgridApiKey: '',
-  resendApiKey: ''
+  smtpUser: process.env.SMTP_USER || 'info29730@gmail.com',
+  smtpPassword: process.env.SMTP_PASS || '',
+  sendgridApiKey: process.env.SENDGRID_API_KEY || '',
+  resendApiKey: process.env.RESEND_API_KEY || ''
 };
 
 let transporter;

@@ -14,6 +14,7 @@ export const contactSchema = z.object({
     .email('Invalid email format')
     .toLowerCase(),
   status: z.enum(['active', 'inactive', 'unsubscribed']).optional().default('active'),
+  tags: z.array(z.string()).optional().default([]),
   customData: z.record(z.any()).optional()
 });
 

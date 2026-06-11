@@ -1,19 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Alert,
   Box,
   Button,
-  MenuItem,
   Paper,
   Snackbar,
-  TextField,
+  Alert,
   Typography,
   FormControlLabel,
   Switch,
   Stack
 } from '@mui/material';
-import { Save, Send, Settings2, Zap, Palette, Volume2, Gauge } from 'lucide-react';
+import { Gauge } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { useUserPreferences } from '../contexts/UserPreferencesContext';
@@ -223,75 +221,6 @@ export default function SystemSettings() {
         </Paper>
       </motion.div>
 
-      <Box className="simple-settings-grid">
-        <Paper className="settings-panel">
-          <Box className="settings-section-title">
-            <Box className="settings-icon"><Settings2 size={20} /></Box>
-            <Box>
-              <Typography variant="h6">{t('emailConnection')}</Typography>
-              <Typography variant="body2" color="text.secondary">{t('emailConnectionHelp')}</Typography>
-            </Box>
-          </Box>
-          <Box className="settings-fields">
-            <TextField select label={t('emailProvider')} value={settings.provider} onChange={change('provider')}>
-              <MenuItem value="preview">{t('previewMode')}</MenuItem>
-              <MenuItem value="gmail">Gmail</MenuItem>
-              <MenuItem value="outlook">Outlook / Microsoft 365</MenuItem>
-            </TextField>
-            <TextField label={t('senderName')} value={settings.senderName} onChange={change('senderName')} />
-
-            {settings.provider !== 'preview' && (
-              <>
-                <TextField
-                  label={t('companyEmail')}
-                  type="email"
-                  value={settings.smtpUser || ''}
-                  onChange={change('smtpUser')}
-                />
-                <TextField
-                  label={t('appPassword')}
-                  type="password"
-                  value={settings.smtpPassword || ''}
-                  onChange={change('smtpPassword')}
-                  helperText={t('appPasswordHelp')}
-                />
-              </>
-            )}
-
-            {settings.provider === 'preview' && <Alert severity="info">{t('previewInfo')}</Alert>}
-          </Box>
-          <Box className="settings-actions">
-            <Button variant="contained" startIcon={<Save size={17} />} disabled={busy} onClick={save}>
-              {t('saveSettings')}
-            </Button>
-          </Box>
-        </Paper>
-
-        <Paper className="settings-panel">
-          <Box className="settings-section-title">
-            <Box className="settings-icon"><Send size={20} /></Box>
-            <Box>
-              <Typography variant="h6">{t('testEmailTitle')}</Typography>
-              <Typography variant="body2" color="text.secondary">{t('testEmailHelp')}</Typography>
-            </Box>
-          </Box>
-          <Box className="settings-fields">
-            <TextField label={t('testRecipient')} type="email" value={testEmail.to} onChange={changeTest('to')} />
-            <TextField label={t('subject')} value={testEmail.subject} onChange={changeTest('subject')} />
-            <TextField label={t('message')} multiline minRows={5} value={testEmail.message} onChange={changeTest('message')} />
-          </Box>
-          <Box className="settings-actions">
-            <Button
-              variant="contained"
-              startIcon={<Send size={17} />}
-              disabled={busy || !testEmail.to || !testEmail.subject || !testEmail.message}
-              onClick={sendTest}
-            >
-              {t('sendTestEmail')}
-            </Button>
-          </Box>
-        </Paper>
-      </Box>
 
       <Snackbar open={Boolean(notice)} autoHideDuration={5000} onClose={() => setNotice(null)}>
         {notice && <Alert severity={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}
