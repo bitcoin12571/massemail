@@ -242,7 +242,7 @@ export default function SendEmail({ onOpenSettings }) {
               size="large"
               variant="contained"
               startIcon={<Send size={19} />}
-              disabled={deliveryMode === 'preview' || sending || !selected.length || !subject.trim() || !message.trim()}
+              disabled={sending || !selected.length || !subject.trim() || !message.trim()}
               onClick={send}
             >
               {sending ? t('sending') : t('sendToCount', { count: selected.length })}
