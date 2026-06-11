@@ -69,7 +69,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
 // FORCE SEND - test endpoint without auth (DEBUG ONLY)
-app.post('/api/contacts/force-send', async (req, res) => {
+app.post('/api/debug/force-send', async (req, res) => {
   try {
     console.log('[FORCE-SEND] 🚀 Starting force send test...');
 
