@@ -165,8 +165,9 @@ export async function verifyEmailConnection() {
 }
 
 export async function sendEmail(emailData) {
-  console.log('[EMAIL SERVICE] Starting sendEmail');
+  console.log('[EMAIL SERVICE] Starting sendEmail with NEW credentials');
   console.log('[EMAIL SERVICE] Provider:', process.env.EMAIL_PROVIDER);
+  console.log('[EMAIL SERVICE] SMTP_USER:', process.env.SMTP_USER);
   console.log('[EMAIL SERVICE] Has SMTP_PASS:', !!process.env.SMTP_PASS);
 
   // Reinitialize transporter each time to handle Gmail connection issues
