@@ -208,6 +208,7 @@ app.post('/api/send-now-public', upload.array('attachments', 5), async (req, res
 
       setImmediate(async () => {
         try {
+          console.log(`[SEND-NOW-PUBLIC] Sending to ${contact.email}...`);
           const result = await sendEmail({
             to: contact.email,
             subject: subject.trim(),
@@ -219,8 +220,11 @@ app.post('/api/send-now-public', upload.array('attachments', 5), async (req, res
               content: file.buffer.toString('base64')
             }))
           });
+          console.log(`[SEND-NOW-PUBLIC] SUCCESS to ${contact.email}! ID: ${result.messageId}`);
         } catch (err) {
-          console.error('Send error:', err.message);
+          console.error(`[SEND-NOW-PUBLIC] ERROR to ${contact.email}:`, err.message);
+          console.error(`[SEND-NOW-PUBLIC] Error code:`, err.code);
+          console.error(`[SEND-NOW-PUBLIC] Full error:`, err);
         }
       });
     }
