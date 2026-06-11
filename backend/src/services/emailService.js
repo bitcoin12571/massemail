@@ -211,13 +211,44 @@ export async function sendEmail(emailData) {
       hasPassword: !!settings.smtpPassword
     }, null, 2)}`);
 
+    // Process attachments: images as inline, files as attachments
+    const inlineImages = [];
+    const fileAttachments = [];
+
+    if (emailData.attachments) {
+      emailData.attachments.forEach((att, idx) => {
+        const isImage = att.contentType && att.contentType.startsWith('image/');
+        if (isImage) {
+          inlineImages.push({
+            filename: att.filename,
+            content: Buffer.from(att.content, 'base64'),
+            contentType: att.contentType,
+            cid: `image_${idx}@campaign`
+          });
+        } else {
+          fileAttachments.push({
+            filename: att.filename,
+            content: Buffer.from(att.content, 'base64'),
+            contentType: att.contentType
+          });
+        }
+      });
+    }
+
+    // Replace image references in HTML with inline CIDs
+    let htmlContent = emailData.personalizedHtml || emailData.html;
+    inlineImages.forEach((img, idx) => {
+      const imgTag = `<img src="cid:image_${idx}@campaign" style="max-width: 100%; height: auto;" />`;
+      htmlContent = htmlContent.replace(/\[image\]|\{image\}/gi, imgTag);
+    });
+
     const result = await transporter.sendMail({
       from: `"${settings.senderName}" <${settings.senderEmail}>`,
       to: emailData.to,
       subject: emailData.subject,
-      html: emailData.personalizedHtml || emailData.html,
+      html: htmlContent,
       text: emailData.personalizedText || emailData.text,
-      attachments: emailData.attachments || []
+      attachments: [...inlineImages, ...fileAttachments]
     });
 
     console.log(`[EMAIL SERVICE] ✅ Nodemailer sent successfully via ${settings.provider}`);
