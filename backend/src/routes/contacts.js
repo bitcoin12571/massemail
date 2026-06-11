@@ -75,21 +75,20 @@ router.post('/', validateRequest(contactSchema), async (req, res) => {
       email: email.toLowerCase().trim(),
       name,
       tags: tags || [],
-      verified: false,
-      verificationToken,
-      verificationTokenExpiry,
+      verified: true,  // Auto-verified for immediate sending
+      verificationToken: null,
+      verificationTokenExpiry: null,
       customData: customData || {},
       createdBy: req.user.id
     });
 
-    // Send verification email
-    try {
-      const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}&email=${encodeURIComponent(contact.email)}`;
-      await sendVerificationEmail(contact, verificationUrl);
-    } catch (emailError) {
-      console.error('Verification email send failed:', emailError);
-      // Don't fail the contact creation, just log the error
-    }
+    // Skip verification email - contacts are auto-verified for immediate sending
+    // try {
+    //   const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}&email=${encodeURIComponent(contact.email)}`;
+    //   await sendVerificationEmail(contact, verificationUrl);
+    // } catch (emailError) {
+    //   console.error('Verification email send failed:', emailError);
+    // }
 
     res.status(201).json({
       ...contact.toJSON(),
