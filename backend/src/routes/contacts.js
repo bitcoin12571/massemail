@@ -299,49 +299,6 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
   }
 });
 
-// FORCE SEND - test endpoint without auth (DEBUG ONLY)
-router.post('/force-send', async (req, res) => {
-  try {
-    console.log('[FORCE-SEND] 🚀 Starting force send test...');
-
-    const Contact = (await import('../models/Contact.js')).default;
-    const { sendEmail } = await import('../services/emailService.js');
-
-    // Find FIRST contact regardless of user
-    const contact = await Contact.findOne({
-      order: [['createdAt', 'ASC']]
-    });
-
-    if (!contact) {
-      console.log('[FORCE-SEND] ❌ No contacts found in database');
-      return res.status(400).json({ error: 'No contacts in database' });
-    }
-
-    console.log(`[FORCE-SEND] ✅ Found contact: ${contact.email}`);
-
-    const result = await sendEmail({
-      to: contact.email,
-      subject: 'FORCE TEST EMAIL',
-      html: '<p><strong>FORCE TEST - If you see this, email sending WORKS!</strong></p>',
-      text: 'FORCE TEST - If you see this, email sending WORKS!'
-    });
-
-    console.log('[FORCE-SEND] ✅ Email sent! Message ID:', result.messageId);
-    res.json({
-      success: true,
-      sentTo: contact.email,
-      messageId: result.messageId,
-      message: 'Test email sent successfully!'
-    });
-  } catch (error) {
-    console.error('[FORCE-SEND] ❌ FAILED:', error.message);
-    res.status(500).json({
-      error: error.message,
-      code: error.code,
-      type: error.name
-    });
-  }
-});
 
 // TEST EMAIL - send to first client in database
 router.post('/test-send', async (req, res) => {
