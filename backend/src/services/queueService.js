@@ -28,8 +28,8 @@ async function processJobs() {
   processing = true;
 
   while (jobs.length > 0) {
-    // Process 10 emails in parallel for faster sending
-    const batchSize = 10;
+    // Process 50 emails in parallel for INSTANT sending
+    const batchSize = 50;
     const batch = [];
     for (let i = 0; i < batchSize && jobs.length > 0; i++) {
       batch.push(jobs.shift());

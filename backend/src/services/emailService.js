@@ -173,17 +173,8 @@ export async function sendEmail(emailData) {
     await initializeEmailService();
   }
 
-  console.log(`\n[EMAIL SERVICE] ================================`);
-  console.log(`[EMAIL SERVICE] 📧 Sending email via ${settings.provider}`);
-  console.log(`[EMAIL SERVICE] To: ${emailData.to}`);
-  console.log(`[EMAIL SERVICE] Subject: ${emailData.subject}`);
-  console.log(`[EMAIL SERVICE] From: "${settings.senderName}" <${settings.senderEmail}>`);
-  console.log(`[EMAIL SERVICE] Provider: ${settings.provider}`);
-  console.log(`[EMAIL SERVICE] SMTP Host: ${settings.smtpHost}`);
-  console.log(`[EMAIL SERVICE] SMTP User: ${settings.smtpUser}`);
-  console.log(`[EMAIL SERVICE] SMTP Pass exists: ${!!settings.smtpPassword}`);
-  console.log(`[EMAIL SERVICE] SMTP Pass length: ${settings.smtpPassword?.length || 0}`);
-  console.log(`[EMAIL SERVICE] ================================\n`);
+  // Minimal logging for speed
+  // console.log(`[EMAIL SERVICE] Sending to ${emailData.to}`);
 
   // Use Resend if provider is resend
   if (settings.provider === 'resend' && resendClient) {
@@ -215,26 +206,27 @@ export async function sendEmail(emailData) {
 
   // Fall back to Nodemailer for other providers (Gmail, Outlook, SendGrid, SMTP, etc.)
   try {
-    console.log(`[EMAIL SERVICE] 🚀 ATTEMPTING TO SEND EMAIL`);
-    console.log(`[EMAIL SERVICE] Provider: ${settings.provider}`);
-    console.log(`[EMAIL SERVICE] From: ${settings.senderEmail}`);
-    console.log(`[EMAIL SERVICE] To: ${emailData.to}`);
-    console.log(`[EMAIL SERVICE] Subject: ${emailData.subject}`);
-    console.log(`[EMAIL SERVICE] SMTP User: ${settings.smtpUser}`);
-    console.log(`[EMAIL SERVICE] SMTP Password: ${settings.smtpPassword || 'NOT SET'}`);
-    console.log(`[EMAIL SERVICE] Password length: ${settings.smtpPassword?.length}`);
+    // Skip verbose logging for speed
+    // console.log(`[EMAIL SERVICE] 🚀 ATTEMPTING TO SEND EMAIL`);
+    // console.log(`[EMAIL SERVICE] Provider: ${settings.provider}`);
+    // console.log(`[EMAIL SERVICE] From: ${settings.senderEmail}`);
+    // console.log(`[EMAIL SERVICE] To: ${emailData.to}`);
+    // console.log(`[EMAIL SERVICE] Subject: ${emailData.subject}`);
+    // console.log(`[EMAIL SERVICE] SMTP User: ${settings.smtpUser}`);
+    // console.log(`[EMAIL SERVICE] SMTP Password: ${settings.smtpPassword || 'NOT SET'}`);
+    // console.log(`[EMAIL SERVICE] Password length: ${settings.smtpPassword?.length}`);
 
-    // VERIFY TRANSPORTER BEFORE SENDING
-    if (settings.provider === 'gmail') {
-      try {
-        console.log(`[EMAIL SERVICE] ✅ Verifying Gmail connection...`);
-        await transporter.verify();
-        console.log(`[EMAIL SERVICE] ✅ Gmail connection verified!`);
-      } catch (verifyErr) {
-        console.error(`[EMAIL SERVICE] ❌ GMAIL VERIFICATION FAILED:`, verifyErr.message);
-        throw verifyErr;
-      }
-    }
+    // SKIP VERIFICATION - it's slow! Just send directly
+    // if (settings.provider === 'gmail') {
+    //   try {
+    //     console.log(`[EMAIL SERVICE] ✅ Verifying Gmail connection...`);
+    //     await transporter.verify();
+    //     console.log(`[EMAIL SERVICE] ✅ Gmail connection verified!`);
+    //   } catch (verifyErr) {
+    //     console.error(`[EMAIL SERVICE] ❌ GMAIL VERIFICATION FAILED:`, verifyErr.message);
+    //     throw verifyErr;
+    //   }
+    // }
 
     // Process attachments: images as inline, files as attachments
     const inlineImages = [];

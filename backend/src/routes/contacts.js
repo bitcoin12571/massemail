@@ -134,15 +134,7 @@ router.post('/import', async (req, res) => {
 
 router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
   try {
-    console.log('\n\n[SEND-NOW] ================================================');
-    console.log('[SEND-NOW] 📧 SEND EMAIL REQUEST');
-    console.log('[SEND-NOW] User ID:', req.user?.id);
-    console.log('[SEND-NOW] Body contactIds:', req.body.contactIds);
-    console.log('[SEND-NOW] Body recipients:', req.body.recipients?.length);
-    console.log('[SEND-NOW] Subject:', req.body.subject);
-    console.log('[SEND-NOW] Message length:', req.body.message?.length);
-    console.log('[SEND-NOW] Files:', req.files?.length);
-
+    // Minimal logging for speed
     const contactIds = typeof req.body.contactIds === 'string'
       ? JSON.parse(req.body.contactIds)
       : req.body.contactIds;
@@ -151,15 +143,10 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
       : req.body.recipients;
     const { subject, message } = req.body;
 
-    console.log('[SEND-NOW] Parsed contactIds:', contactIds);
-    console.log('[SEND-NOW] Parsed recipientSnapshots count:', recipientSnapshots?.length);
-
     if (!Array.isArray(contactIds) || contactIds.length === 0) {
-      console.log('[SEND-NOW] ❌ No contact IDs provided');
       return res.status(400).json({ error: 'Select at least one recipient' });
     }
     if (!subject?.trim() || !message?.trim()) {
-      console.log('[SEND-NOW] ❌ Missing subject or message');
       return res.status(400).json({ error: 'Subject and message are required' });
     }
 
@@ -243,8 +230,7 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
     // Send emails immediately (not queued, since queue doesn't persist in Vercel)
     const { sendEmail } = await import('../services/emailService.js');
 
-    console.log(`[SEND-NOW] Starting to send ${contacts.length} emails...`);
-
+    // Send all emails in parallel background
     for (const contact of contacts) {
       const email = await Email.create({
         campaignId: campaign.id,
@@ -252,8 +238,6 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
         recipientEmail: contact.email,
         status: 'pending'
       });
-
-      console.log(`[SEND-NOW] Sending to ${contact.email} (Email ID: ${email.id})`);
 
       // Send immediately in background (don't wait)
       (async () => {
@@ -270,15 +254,13 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
             }))
           });
 
-          console.log(`[SEND-NOW] ✅ Email sent to ${contact.email}. Message ID: ${result.messageId}`);
-
           await email.update({
             status: 'sent',
             sentAt: new Date(),
             sendgridMessageId: result.messageId
           });
         } catch (err) {
-          console.error(`[SEND-NOW] ❌ Failed to send to ${contact.email}:`, err.message || err);
+          // Silent failure - just update status
           await email.update({
             status: 'failed',
             failureReason: (err.message || 'Send failed').substring(0, 500)
@@ -286,8 +268,6 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
         }
       })();
     }
-
-    console.log(`[SEND-NOW] Queued ${contacts.length} emails for delivery`);
 
     res.status(202).json({
       success: true,
