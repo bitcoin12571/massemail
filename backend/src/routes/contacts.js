@@ -133,6 +133,10 @@ router.post('/import', async (req, res) => {
 
 router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
   try {
+    console.log('[SEND-NOW] Request received');
+    console.log('[SEND-NOW] User ID:', req.user?.id);
+    console.log('[SEND-NOW] Body keys:', Object.keys(req.body));
+
     // Minimal logging for speed
     const contactIds = typeof req.body.contactIds === 'string'
       ? JSON.parse(req.body.contactIds)
@@ -142,21 +146,28 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
       : req.body.recipients;
     const { subject, message } = req.body;
 
+    console.log('[SEND-NOW] Contact IDs:', contactIds);
+    console.log('[SEND-NOW] Subject:', subject);
+
     if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      console.log('[SEND-NOW] Error: No contact IDs');
       return res.status(400).json({ error: 'Select at least one recipient' });
     }
     if (!subject?.trim() || !message?.trim()) {
+      console.log('[SEND-NOW] Error: Missing subject or message');
       return res.status(400).json({ error: 'Subject and message are required' });
     }
 
+    console.log('[SEND-NOW] Finding contacts...');
     let contacts = await Contact.findAll({
       where: {
         id: contactIds,
         createdBy: req.user.id,
         status: 'active'
-        // TESTING: Skip verification check for dev mode
       }
     });
+
+    console.log('[SEND-NOW] Found contacts:', contacts.length);
 
     if (process.env.VERCEL && !process.env.DATABASE_URL && contacts.length < contactIds.length) {
       const existingIds = new Set(contacts.map((contact) => contact.id));
