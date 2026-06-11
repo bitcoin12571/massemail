@@ -281,7 +281,12 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
       status: 'sent'
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[SEND-NOW] ERROR:', error.message);
+    console.error('[SEND-NOW] Stack:', error.stack);
+    res.status(500).json({
+      error: error.message,
+      code: error.code
+    });
   }
 });
 

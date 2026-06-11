@@ -165,10 +165,8 @@ export async function verifyEmailConnection() {
 }
 
 export async function sendEmail(emailData) {
-  // Reuse transporter - no reinit needed for speed
-  if (!transporter) {
-    await initializeEmailService();
-  }
+  // Reinitialize transporter each time to handle Gmail connection issues
+  await initializeEmailService();
 
   // Minimal logging for speed
   // console.log(`[EMAIL SERVICE] Sending to ${emailData.to}`);
