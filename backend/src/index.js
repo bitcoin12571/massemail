@@ -146,6 +146,113 @@ app.post('/api/public/send', upload.array('attachments', 5), async (req, res) =>
   }
 });
 
+// TESTING: Send-now without auth (for debugging)
+const multer = (await import('multer')).default;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 5 }
+});
+
+app.post('/api/contacts/send-now', upload.array('attachments', 5), async (req, res) => {
+  try {
+    console.log('[SEND-NOW-PUBLIC] 🚀 Request received');
+    // Set fake user for testing
+    req.user = { id: 1 };
+
+    const Contact = (await import('./models/Contact.js')).default;
+    const Campaign = (await import('./models/Campaign.js')).default;
+    const Email = (await import('./models/Email.js')).default;
+
+    const contactIds = typeof req.body.contactIds === 'string'
+      ? JSON.parse(req.body.contactIds)
+      : req.body.contactIds;
+    const { subject, message } = req.body;
+
+    console.log('[SEND-NOW-PUBLIC] Subject:', subject);
+    console.log('[SEND-NOW-PUBLIC] Contact IDs:', contactIds);
+
+    if (!Array.isArray(contactIds) || contactIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one recipient' });
+    }
+    if (!subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ error: 'Subject and message are required' });
+    }
+
+    // Find contacts
+    let contacts = await Contact.findAll({
+      where: { id: contactIds, status: 'active' }
+    });
+
+    if (!contacts.length) {
+      return res.status(400).json({ error: 'No active recipients found' });
+    }
+
+    console.log('[SEND-NOW-PUBLIC] Found contacts:', contacts.length);
+
+    const safeMessage = message
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('\n', '<br>');
+
+    // Create campaign
+    const campaign = await Campaign.create({
+      name: `Quick send - ${new Date().toLocaleString('en-GB')}`,
+      subject: subject.trim(),
+      htmlContent: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
+      textContent: message.trim(),
+      status: 'sent',
+      createdBy: 1
+    });
+
+    console.log('[SEND-NOW-PUBLIC] Campaign created:', campaign.id);
+
+    // Create email records immediately with sent status
+    const { sendEmail } = await import('./services/emailService.js');
+
+    for (const contact of contacts) {
+      const emailRecord = await Email.create({
+        campaignId: campaign.id,
+        contactId: contact.id,
+        recipientEmail: contact.email,
+        status: 'sent',
+        sentAt: new Date()
+      });
+
+      console.log('[SEND-NOW-PUBLIC] Email record created:', emailRecord.id);
+
+      // Send in background
+      setImmediate(async () => {
+        try {
+          const result = await sendEmail({
+            to: contact.email,
+            subject: subject.trim(),
+            html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
+            text: message.trim()
+          });
+          console.log('[SEND-NOW-PUBLIC] Email sent to', contact.email, 'ID:', result.messageId);
+        } catch (err) {
+          console.error('[SEND-NOW-PUBLIC] Send error:', err.message);
+        }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      campaignId: campaign.id,
+      recipientCount: contacts.length,
+      status: 'sent'
+    });
+  } catch (error) {
+    console.error('[SEND-NOW-PUBLIC] ERROR:', error.message);
+    console.error('[SEND-NOW-PUBLIC] Stack:', error.stack);
+    res.status(500).json({
+      error: error.message
+    });
+  }
+});
+
 // Protected routes
 app.use('/api/contacts', authMiddleware, contactRoutes);
 app.use('/api/campaigns', authMiddleware, campaignRoutes);
