@@ -170,14 +170,6 @@ export default function SendEmail({ onOpenSettings }) {
             <Chip color={selected.length ? 'primary' : 'default'} label={t('selectedRecipients', { count: selected.length })} />
           </Box>
           <Box className="composer-fields">
-            {deliveryMode === 'preview' && (
-              <Alert
-                severity="warning"
-                action={<Button color="inherit" size="small" onClick={onOpenSettings}>{t('configureEmail')}</Button>}
-              >
-                {t('previewSendBlocked')}
-              </Alert>
-            )}
             {selectedContacts.length > 0 && (
               <Box className="selected-recipient-chips">
                 {selectedContacts.slice(0, 5).map((contact) => <Chip key={contact.id} label={contact.email} size="small" />)}
