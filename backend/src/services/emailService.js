@@ -261,7 +261,8 @@ export async function sendEmail(emailData) {
       htmlContent += imageTags;
     }
 
-    const result = await transporter.sendMail({
+    // Send with 10 second timeout
+    const sendMailPromise = transporter.sendMail({
       from: `"${settings.senderName}" <${settings.senderEmail}>`,
       to: emailData.to,
       subject: emailData.subject,
@@ -269,6 +270,12 @@ export async function sendEmail(emailData) {
       text: emailData.personalizedText || emailData.text,
       attachments: [...inlineImages, ...fileAttachments]
     });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Email send timeout after 10s')), 10000)
+    );
+
+    const result = await Promise.race([sendMailPromise, timeoutPromise]);
 
     console.log(`[EMAIL SERVICE] ✅ Nodemailer sent successfully via ${settings.provider}`);
     console.log(`[EMAIL SERVICE] Message ID: ${result.messageId || result.id}`);
