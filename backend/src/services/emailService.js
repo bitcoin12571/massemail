@@ -233,47 +233,41 @@ export async function sendEmail(emailData) {
     //   }
     // }
 
-    // Process attachments: images as inline, files as attachments
-    const inlineImages = [];
-    const fileAttachments = [];
-    let imageTags = '';
+    // Process attachments: all as regular attachments (not inline)
+    // This is more compatible with Gmail
+    const attachments = [];
 
-    if (emailData.attachments) {
+    if (emailData.attachments && emailData.attachments.length > 0) {
+      console.log(`[EMAIL SERVICE] Processing ${emailData.attachments.length} attachments`);
+
       emailData.attachments.forEach((att, idx) => {
-        const isImage = att.contentType && att.contentType.startsWith('image/');
-        if (isImage) {
-          inlineImages.push({
-            filename: att.filename,
-            content: Buffer.from(att.content, 'base64'),
-            contentType: att.contentType,
-            cid: `image_${idx}@campaign`
+        try {
+          const buffer = Buffer.isBuffer(att.content)
+            ? att.content
+            : Buffer.from(att.content, 'base64');
+
+          attachments.push({
+            filename: att.filename || `attachment_${idx}`,
+            content: buffer,
+            contentType: att.contentType || 'application/octet-stream'
           });
-          // Add image tag to display in email
-          imageTags += `<div style="margin-top: 20px;"><img src="cid:image_${idx}@campaign" style="max-width: 100%; height: auto; border-radius: 8px;" /></div>`;
-        } else {
-          fileAttachments.push({
-            filename: att.filename,
-            content: Buffer.from(att.content, 'base64'),
-            contentType: att.contentType
-          });
+          console.log(`[EMAIL SERVICE] Added attachment: ${att.filename} (${att.contentType})`);
+        } catch (err) {
+          console.error(`[EMAIL SERVICE] Error processing attachment ${att.filename}:`, err.message);
         }
       });
     }
 
-    // Add images to HTML content at the end
-    let htmlContent = emailData.personalizedHtml || emailData.html;
-    if (imageTags) {
-      htmlContent += imageTags;
-    }
+    console.log(`[EMAIL SERVICE] Total attachments to send: ${attachments.length}`);
 
     // Send with 10 second timeout
     const sendMailPromise = transporter.sendMail({
       from: `"${settings.senderName}" <${settings.senderEmail}>`,
       to: emailData.to,
       subject: emailData.subject,
-      html: htmlContent,
+      html: emailData.personalizedHtml || emailData.html,
       text: emailData.personalizedText || emailData.text,
-      attachments: [...inlineImages, ...fileAttachments]
+      attachments: attachments.length > 0 ? attachments : undefined
     });
 
     const timeoutPromise = new Promise((_, reject) =>
