@@ -6,6 +6,9 @@ import {
   Button,
   Checkbox,
   Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   InputAdornment,
   LinearProgress,
   Paper,
@@ -13,7 +16,7 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import { Eye, File, Image, Paperclip, Search, Send, Sparkles, UsersRound, X } from 'lucide-react';
+import { CheckCircle, Eye, File, Image, Paperclip, Search, Send, Sparkles, UsersRound, X } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { EmailPreviewModalCompose } from '../components/EmailPreviewModalCompose.jsx';
@@ -31,6 +34,8 @@ export default function SendEmail({ onOpenSettings }) {
   const [notice, setNotice] = useState(null);
   const [deliveryMode, setDeliveryMode] = useState('preview');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
+  const [resultOpen, setResultOpen] = useState(false);
 
   useEffect(() => {
     API.get('/settings/email')
@@ -102,7 +107,19 @@ export default function SendEmail({ onOpenSettings }) {
       const response = await API.post('/contacts/send-now', data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      setNotice({ type: 'success', text: t('queued', { count: response.data.recipientCount }) });
+
+      // Show success result
+      setSendResult({
+        success: true,
+        sentCount: response.data.sentCount,
+        recipientCount: response.data.recipientCount,
+        subject: subject,
+        filesCount: files.length,
+        campaignId: response.data.campaignId
+      });
+      setResultOpen(true);
+
+      // Clear form
       setSelected([]);
       setSubject('');
       setMessage('');
@@ -269,6 +286,79 @@ export default function SendEmail({ onOpenSettings }) {
       <Snackbar open={Boolean(notice)} autoHideDuration={5000} onClose={() => setNotice(null)}>
         {notice && <Alert severity={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}
       </Snackbar>
+
+      {/* Send Success Result Modal */}
+      <Dialog open={resultOpen} onClose={() => setResultOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}>
+          <CheckCircle size={24} style={{ color: '#10b981' }} />
+          <Typography variant="h6">Emails Sent Successfully!</Typography>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          {sendResult && (
+            <Box sx={{ display: 'grid', gap: 2 }}>
+              {/* Main Stats */}
+              <Box sx={{
+                p: 2,
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white',
+                borderRadius: 1,
+                textAlign: 'center'
+              }}>
+                <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+                  {sendResult.sentCount} / {sendResult.recipientCount}
+                </Typography>
+                <Typography variant="body2">Emails queued for delivery</Typography>
+              </Box>
+
+              {/* Details Grid */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+                <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1 }}>
+                  <Typography variant="caption" color="text.secondary">Subject</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }} noWrap>
+                    {sendResult.subject || '(No subject)'}
+                  </Typography>
+                </Box>
+                <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1 }}>
+                  <Typography variant="caption" color="text.secondary">Attachments</Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
+                    {sendResult.filesCount} {sendResult.filesCount === 1 ? 'file' : 'files'}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* Campaign ID */}
+              <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1 }}>
+                <Typography variant="caption" color="text.secondary">Campaign ID</Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 600, mt: 0.5, fontFamily: 'monospace', wordBreak: 'break-all' }}
+                >
+                  {sendResult.campaignId}
+                </Typography>
+              </Box>
+
+              {/* Info */}
+              <Alert severity="info" sx={{ border: 'none', background: '#cffafe', color: '#164e63' }}>
+                <Typography variant="body2">
+                  Emails will be delivered within the next few minutes. Check the Delivery Status page to monitor progress.
+                </Typography>
+              </Alert>
+
+              {/* Actions */}
+              <Box sx={{ display: 'flex', gap: 1, pt: 1 }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={() => setResultOpen(false)}
+                  sx={{ background: '#7c3aed' }}
+                >
+                  Done
+                </Button>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
