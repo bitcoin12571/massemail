@@ -35,6 +35,9 @@ function createTransport(config) {
   if (config.provider === 'gmail' && config.smtpUser) {
     return nodemailer.createTransport({
       service: 'gmail',
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
       auth: { user: config.smtpUser, pass: config.smtpPassword }
     });
   }
@@ -128,6 +131,9 @@ export function isRealEmailDeliveryConfigured() {
   if (settings.provider === 'sendgrid') {
     return Boolean(settings.sendgridApiKey);
   }
+  if (settings.provider === 'resend') {
+    return Boolean(settings.resendApiKey);
+  }
   return false;
 }
 
@@ -165,15 +171,15 @@ export async function verifyEmailConnection() {
 }
 
 export async function sendEmail(emailData) {
-  console.log('[EMAIL SERVICE] Starting sendEmail with NEW credentials');
-  console.log('[EMAIL SERVICE] Provider:', process.env.EMAIL_PROVIDER);
-  console.log('[EMAIL SERVICE] SMTP_USER:', process.env.SMTP_USER);
-  console.log('[EMAIL SERVICE] Has SMTP_PASS:', !!process.env.SMTP_PASS);
+  if (!transporter) await initializeEmailService();
 
-  // Reinitialize transporter each time to handle Gmail connection issues
-  await initializeEmailService();
-
-  console.log('[EMAIL SERVICE] After init, settings.provider:', settings.provider);
+  // Validate email configuration before sending
+  if (!isRealEmailDeliveryConfigured()) {
+    throw new Error(
+      `Email delivery is not configured. Current provider: "${settings.provider}". ` +
+      `Please configure email settings with a valid provider (gmail, outlook, sendgrid, resend, or smtp).`
+    );
+  }
 
   // Use Resend if provider is resend
   if (settings.provider === 'resend' && resendClient) {
