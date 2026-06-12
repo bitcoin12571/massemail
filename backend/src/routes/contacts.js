@@ -18,12 +18,6 @@ import {
 
 const router = express.Router();
 
-// Bypass auth for send-now endpoint
-router.post('/send-now', (req, res, next) => {
-  // Set fake user for send-now (public endpoint)
-  req.user = { id: 1 };
-  next();
-});
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024, files: 5 }
@@ -176,7 +170,8 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
 
     console.log('[SEND-NOW] Found contacts:', contacts.length);
 
-    if (process.env.VERCEL && !process.env.DATABASE_URL && contacts.length < contactIds.length) {
+    const hasPersistentDatabase = process.env.DATABASE_URL?.startsWith('postgres');
+    if (process.env.VERCEL && !hasPersistentDatabase && contacts.length < contactIds.length) {
       const existingIds = new Set(contacts.map((contact) => contact.id));
       const snapshotsById = new Map(
         (Array.isArray(recipientSnapshots) ? recipientSnapshots : [])
@@ -244,58 +239,72 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
       createdBy: req.user.id
     });
 
-    // Send emails in background (don't wait for completion)
     const { sendEmail } = await import('../services/emailService.js');
 
-    // Create all Email records with 'sent' status IMMEDIATELY
     const emailRecords = [];
     for (const contact of contacts) {
       const email = await Email.create({
         campaignId: campaign.id,
         contactId: contact.id,
         recipientEmail: contact.email,
-        status: 'sent',  // Mark as sent IMMEDIATELY for instant stats
-        sentAt: new Date()
+        status: 'pending'
       });
       emailRecords.push({ email, contact });
     }
 
-    // Update campaign status to sent IMMEDIATELY
-    await campaign.update({ status: 'sent' });
-
-    // Fire and forget - actually send emails in parallel background
-    for (const { email, contact } of emailRecords) {
-      setImmediate(async () => {
+    const results = await Promise.allSettled(
+      emailRecords.map(async ({ email, contact }) => {
         try {
+          const attachments = (req.files || []).map((file) => ({
+            filename: file.originalname,
+            contentType: file.mimetype,
+            content: file.buffer.toString('base64')
+          }));
+
+          console.log(`[SEND-NOW] Sending to ${contact.email} with ${attachments.length} attachments`);
+
           const result = await sendEmail({
             to: contact.email,
             subject: subject.trim(),
             html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
             text: message.trim(),
-            attachments: (req.files || []).map((file) => ({
-              filename: file.originalname,
-              contentType: file.mimetype,
-              content: file.buffer.toString('base64')
-            }))
+            attachments: attachments
           });
 
-          // Update with message ID
           await email.update({
+            status: 'sent',
+            sentAt: new Date(),
             sendgridMessageId: result.messageId
           });
+          return contact.email;
         } catch (err) {
-          // Keep as sent even if nodemailer fails (email accepted by SMTP)
-          // Just log it
+          await email.update({
+            status: 'failed',
+            failureReason: (err.message || String(err)).slice(0, 500)
+          });
           console.error(`Email send error to ${contact.email}:`, err.message);
+          throw err;
         }
+      })
+    );
+
+    const failedCount = results.filter((result) => result.status === 'rejected').length;
+    if (failedCount > 0) {
+      await campaign.update({ status: 'paused' });
+      return res.status(502).json({
+        error: `${failedCount} of ${contacts.length} email(s) could not be sent.`,
+        recipientCount: contacts.length,
+        failedCount
       });
     }
 
-    // Return INSTANTLY - everything is marked as sent
+    await campaign.update({ status: 'sent', sentAt: new Date() });
+
     res.status(200).json({
       success: true,
       campaignId: campaign.id,
       recipientCount: contacts.length,
+      sentCount: contacts.length,
       status: 'sent'
     });
   } catch (error) {
