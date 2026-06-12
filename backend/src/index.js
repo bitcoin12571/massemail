@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import multer from 'multer';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sequelize } from './config/database.js';
@@ -16,10 +17,17 @@ import aiRoutes from './routes/ai.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authMiddleware } from './middleware/auth.js';
 
-dotenv.config();
+// Load .env only in development (Vercel uses environment variables)
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config();
+}
 
 const app = express();
 let initializationPromise;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 5 }
+});
 
 export function initializeApp() {
   if (!initializationPromise) {
@@ -68,99 +76,12 @@ app.use(async (req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/webhooks', webhookRoutes);
 
-// DEBUG TEST EMAIL - send directly to hardcoded email without requiring database
-app.post('/api/debug/test-email', async (req, res) => {
-  try {
-    console.log('[DEBUG-TEST] 🚀 SENDING DIRECT TEST EMAIL...');
-    console.log('[DEBUG-TEST] Provider:', process.env.EMAIL_PROVIDER);
-    console.log('[DEBUG-TEST] SMTP User:', process.env.SMTP_USER);
-    console.log('[DEBUG-TEST] Has password:', !!process.env.SMTP_PASS);
-
-    const { sendEmail } = await import('./services/emailService.js');
-
-    const result = await sendEmail({
-      to: 'maximplacinta589@gmail.com',
-      subject: '✅ TEST EMAIL FROM VERCEL - ' + new Date().toISOString(),
-      html: '<p><strong>🎉 THIS EMAIL IS FROM VERCEL!</strong></p><p>If you see this, the Gmail SMTP connection WORKS!</p><p>Time: ' + new Date().toISOString() + '</p>',
-      text: 'TEST EMAIL FROM VERCEL - If you see this, Gmail SMTP works!'
-    });
-
-    console.log('[DEBUG-TEST] ✅ EMAIL SENT! Message ID:', result.messageId);
-    res.json({
-      success: true,
-      messageId: result.messageId,
-      sentTo: 'maximplacinta589@gmail.com',
-      message: '✅ Test email sent successfully to maximplacinta589@gmail.com! Check your inbox!',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('[DEBUG-TEST] ❌ FAILED:', error.message);
-    console.error('[DEBUG-TEST] ERROR CODE:', error.code);
-    console.error('[DEBUG-TEST] FULL ERROR:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      code: error.code,
-      type: error.name,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// PUBLIC SEND - test endpoint without auth requirement
-app.post('/api/public/send', upload.array('attachments', 5), async (req, res) => {
-  try {
-    console.log('[PUBLIC-SEND] 🚀 PUBLIC SEND TEST');
-    const { to, subject, message } = req.body;
-
-    if (!to || !subject || !message) {
-      return res.status(400).json({ error: 'Missing to, subject, or message' });
-    }
-
-    const { sendEmail } = await import('./services/emailService.js');
-
-    const result = await sendEmail({
-      to,
-      subject,
-      html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${message}</div>`,
-      text: message,
-      attachments: (req.files || []).map((file) => ({
-        filename: file.originalname,
-        contentType: file.mimetype,
-        content: file.buffer.toString('base64')
-      }))
-    });
-
-    console.log('[PUBLIC-SEND] ✅ SUCCESS! Message ID:', result.messageId);
-    res.json({
-      success: true,
-      messageId: result.messageId,
-      sentTo: to
-    });
-  } catch (error) {
-    console.error('[PUBLIC-SEND] ❌ FAILED:', error.message);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// TESTING: Send-now without auth (for debugging)
-const multer = (await import('multer')).default;
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 5 }
-});
-
-
 // Import here to avoid circular deps
 const Contact = (await import('./models/Contact.js')).default;
 const Campaign = (await import('./models/Campaign.js')).default;
 const Email = (await import('./models/Email.js')).default;
 
-// PUBLIC SEND-NOW endpoint (no auth needed)
-app.post('/api/send-now-public', upload.array('attachments', 5), async (req, res) => {
+app.post('/api/send-now-public', authMiddleware, upload.array('attachments', 5), async (req, res) => {
   try {
     const contactIds = typeof req.body.contactIds === 'string'
       ? JSON.parse(req.body.contactIds)
@@ -192,40 +113,52 @@ app.post('/api/send-now-public', upload.array('attachments', 5), async (req, res
       htmlContent: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
       textContent: message.trim(),
       status: 'sent',
-      createdBy: 1
+      createdBy: req.user.id
     });
 
     const { sendEmail } = await import('./services/emailService.js');
 
+    const failures = [];
     for (const contact of contacts) {
       const emailRecord = await Email.create({
         campaignId: campaign.id,
         contactId: contact.id,
         recipientEmail: contact.email,
-        status: 'sent',
-        sentAt: new Date()
+        status: 'pending'
       });
 
-      setImmediate(async () => {
-        try {
-          console.log(`[SEND-NOW-PUBLIC] Sending to ${contact.email}...`);
-          const result = await sendEmail({
-            to: contact.email,
-            subject: subject.trim(),
-            html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
-            text: message.trim(),
-            attachments: (req.files || []).map((file) => ({
-              filename: file.originalname,
-              contentType: file.mimetype,
-              content: file.buffer.toString('base64')
-            }))
-          });
-          console.log(`[SEND-NOW-PUBLIC] SUCCESS to ${contact.email}! ID: ${result.messageId}`);
-        } catch (err) {
-          console.error(`[SEND-NOW-PUBLIC] ERROR to ${contact.email}:`, err.message);
-          console.error(`[SEND-NOW-PUBLIC] Error code:`, err.code);
-          console.error(`[SEND-NOW-PUBLIC] Full error:`, err);
-        }
+      try {
+        const result = await sendEmail({
+          to: contact.email,
+          subject: subject.trim(),
+          html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
+          text: message.trim(),
+          attachments: (req.files || []).map((file) => ({
+            filename: file.originalname,
+            contentType: file.mimetype,
+            content: file.buffer.toString('base64')
+          }))
+        });
+        await emailRecord.update({
+          status: 'sent',
+          sentAt: new Date(),
+          sendgridMessageId: result.messageId
+        });
+      } catch (error) {
+        failures.push(contact.email);
+        await emailRecord.update({
+          status: 'failed',
+          failureReason: error.message.slice(0, 500)
+        });
+      }
+    }
+
+    await campaign.update({ status: 'sent', sentAt: new Date() });
+
+    if (failures.length) {
+      return res.status(502).json({
+        error: `Email delivery failed for ${failures.length} recipient(s).`,
+        failedRecipients: failures
       });
     }
 
