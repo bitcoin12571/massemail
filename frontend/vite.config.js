@@ -6,12 +6,29 @@ export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   plugins: [react()],
   server: {
+    host: '0.0.0.0',
     port: Number(process.env.FRONTEND_PORT || 3000),
+    strictPort: true,
     hmr: false,
-    middlewareMode: false
+    middlewareMode: false,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true
+      }
+    }
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          mui: ['@mui/material', '@emotion/react', '@emotion/styled'],
+          motion: ['framer-motion'],
+          charts: ['recharts']
+        }
+      }
+    }
   }
 });

@@ -117,8 +117,22 @@ export const emailQueue = {
     console.log(`[EMAIL QUEUE] 🔄 Starting processJobs NOW...`);
     await processJobs();
     console.log(`[EMAIL QUEUE] 🔄 Done processing\n`);
+    return jobId;
   }
 };
+
+export function resetQueueForTests() {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('Queue reset is only available in tests');
+  }
+  jobs.length = 0;
+  stats.waiting = 0;
+  stats.active = 0;
+  stats.completed = 0;
+  stats.failed = 0;
+  processing = false;
+  nextId = 1;
+}
 
 export async function initializeQueue() {
   console.log('Email queue initialized (local mode)');

@@ -71,18 +71,6 @@ export default function QueueMonitor() {
           <Typography color="text.secondary">{t('deliverySubtitle')}</Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <motion.div
-            initial={{ scale: 0.95 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 200 }}
-          >
-            <Chip
-              label={preferences.autoRefreshQueue ? `Live updates: ${REFRESH_INTERVALS.find(i => i.value === preferences.refreshInterval)?.label || 'Manual'}` : 'Live updates off'}
-              color={preferences.autoRefreshQueue ? 'success' : 'default'}
-              onClick={() => updatePreference('autoRefreshQueue', !preferences.autoRefreshQueue)}
-              sx={{ transition: 'all 0.3s ease' }}
-            />
-          </motion.div>
           <Button variant="outlined" startIcon={<RefreshCw size={17} />} disabled={loading} onClick={fetchStats}>{t('refresh')}</Button>
         </Stack>
       </Box>

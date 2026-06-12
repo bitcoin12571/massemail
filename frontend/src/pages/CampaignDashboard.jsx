@@ -261,7 +261,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
           </Box>
           <Typography textAlign="center" fontWeight={750}>{t('operational')}</Typography>
           <Typography textAlign="center" variant="body2" color="text.secondary">
-            Database and local delivery queue are available.
+            Email delivery service is available.
           </Typography>
           <Box className="progress-label">
             <span>Service availability</span><strong>100%</strong>

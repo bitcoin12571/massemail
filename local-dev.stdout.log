@@ -1,0 +1,79 @@
+
+> email-dashboard@1.0.0 dev
+> concurrently --kill-others-on-fail -n backend,frontend "npm:dev:backend" "npm:dev:frontend"
+
+[backend] 
+[backend] > email-dashboard@1.0.0 dev:backend
+[backend] > node --watch backend/src/index.js
+[backend] 
+[frontend] 
+[frontend] > email-dashboard@1.0.0 dev:frontend
+[frontend] > vite --config frontend/vite.config.js
+[frontend] 
+[frontend] 
+[frontend]   [32m[1mVITE[22m v6.4.3[39m  [2mready in [0m[1m314[22m[2m[0m ms[22m
+[frontend] 
+[frontend]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3000[22m/[39m
+[frontend]   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.20.69:[1m3000[22m/[39m
+[backend] ◇ injected env (17) from backend\.env // tip: ⌘ enable debugging { debug: true }
+[backend] [DATABASE] Loading .env from: C:\email-dashboard\backend\.env
+[backend] ◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+[backend] Email queue initialized (local mode)
+[backend] Database connected
+[backend] Models synced
+[backend] [EMAIL SERVICE] Loading configuration...
+[backend] [EMAIL SERVICE] .env EMAIL_PROVIDER: gmail
+[backend] [EMAIL SERVICE] Stored provider: gmail
+[backend] [EMAIL SERVICE] Final provider: gmail
+[backend] [EMAIL SERVICE] ================================================
+[backend] [EMAIL SERVICE] Configuration loaded:
+[backend] [EMAIL SERVICE]   Provider: gmail
+[backend] [EMAIL SERVICE]   User: info29730@gmail.com
+[backend] [EMAIL SERVICE]   From: info29730@gmail.com
+[backend] [EMAIL SERVICE]   Has Password: true
+[backend] [EMAIL SERVICE] ================================================
+[backend] Email service initialized (gmail mode)
+[backend] [SCHEDULER] ✅ Email scheduler started (runs every minute)
+[backend] Server running on http://localhost:5000
+[backend] CORS enabled for all origins
+[backend] [EMAIL SERVICE] ✅ Nodemailer sent successfully via gmail
+[backend] [EMAIL SERVICE] Message ID: <429adb95-44fc-a510-8aa3-1a5b08d325a3@gmail.com>
+[backend] [SEND-NOW] Request received
+[backend] [SEND-NOW] User ID: 00000000-0000-4000-8000-000000000001
+[backend] [SEND-NOW] Body keys: [ 'contactIds', 'recipients', 'subject', 'message' ]
+[backend] [SEND-NOW] Contact IDs: [ 'b70e2d1d-5cf7-4425-b38a-2d6d21f4cba8' ]
+[backend] [SEND-NOW] Subject: beht
+[backend] [SEND-NOW] Finding contacts...
+[backend] [SEND-NOW] Found contacts: 1
+[backend] [EMAIL SERVICE] ✅ Nodemailer sent successfully via gmail
+[backend] [EMAIL SERVICE] Message ID: <266f90ed-4a95-e793-c905-12642957637c@gmail.com>
+[backend] [SEND-NOW] Request received
+[backend] [SEND-NOW] User ID: 00000000-0000-4000-8000-000000000001
+[backend] [SEND-NOW] Body keys: [ 'contactIds', 'recipients', 'subject', 'message' ]
+[backend] [SEND-NOW] Contact IDs: [ 'b70e2d1d-5cf7-4425-b38a-2d6d21f4cba8' ]
+[backend] [SEND-NOW] Subject: tf7tff7tct7
+[backend] [SEND-NOW] Finding contacts...
+[backend] [SEND-NOW] Found contacts: 1
+[backend] [EMAIL SERVICE] ✅ Nodemailer sent successfully via gmail
+[backend] [EMAIL SERVICE] Message ID: <6fa24669-b2c0-7d16-44fb-6440ac090b1c@gmail.com>
+[backend] [SEND-NOW] Request received
+[backend] [SEND-NOW] User ID: 00000000-0000-4000-8000-000000000001
+[backend] [SEND-NOW] Body keys: [ 'contactIds', 'recipients', 'subject', 'message', 'attachments' ]
+[backend] [SEND-NOW] Contact IDs: [ 'b70e2d1d-5cf7-4425-b38a-2d6d21f4cba8' ]
+[backend] [SEND-NOW] Subject: vesecs
+[backend] [SEND-NOW] Finding contacts...
+[backend] [SEND-NOW] Found contacts: 1
+[backend] [EMAIL SERVICE] ✅ Nodemailer sent successfully via gmail
+[backend] [EMAIL SERVICE] Message ID: <de008ee0-a87a-6390-8d63-08be65cb818f@gmail.com>
+[backend] [SEND-NOW] Request received
+[backend] [SEND-NOW] User ID: 00000000-0000-4000-8000-000000000001
+[backend] [SEND-NOW] Body keys: [ 'contactIds', 'recipients', 'subject', 'message', 'attachments' ]
+[backend] [SEND-NOW] Contact IDs: [ 'b70e2d1d-5cf7-4425-b38a-2d6d21f4cba8' ]
+[backend] [SEND-NOW] Subject: uo
+[backend] [SEND-NOW] Finding contacts...
+[backend] [SEND-NOW] Found contacts: 1
+[backend] [EMAIL SERVICE] ✅ Nodemailer sent successfully via gmail
+[backend] [EMAIL SERVICE] Message ID: <f738a373-b510-d337-a37f-78339cc18f91@gmail.com>
+[backend] npm run dev:backend exited with code 1073807364
+--> Sending SIGTERM to other processes..
+[frontend] npm run dev:frontend exited with code 1073807364

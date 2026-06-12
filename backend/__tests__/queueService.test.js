@@ -1,14 +1,13 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { emailQueue, getQueueStats } from '../src/services/queueService.js';
+import { emailQueue, getQueueStats, resetQueueForTests } from '../src/services/queueService.js';
 
 describe('Email Queue Service', () => {
   beforeEach(() => {
-    // Reset queue stats before each test
-    getQueueStats();
+    resetQueueForTests();
   });
 
   describe('emailQueue.add()', () => {
-    it('should add a job to the queue', async () => {
+    it('should process an invalid job and track the failure', async () => {
       const job = {
         emailId: '1',
         campaignId: '1',
@@ -18,18 +17,18 @@ describe('Email Queue Service', () => {
       await emailQueue.add(job);
 
       const stats = await getQueueStats();
-      expect(stats.waiting).toBeGreaterThan(0);
+      expect(stats.waiting).toBe(0);
+      expect(stats.failed).toBe(1);
     });
 
     it('should generate unique job IDs', async () => {
       const job1 = { emailId: '1', campaignId: '1', contactId: '1' };
       const job2 = { emailId: '2', campaignId: '2', contactId: '2' };
 
-      await emailQueue.add(job1);
-      await emailQueue.add(job2);
+      const firstId = await emailQueue.add(job1);
+      const secondId = await emailQueue.add(job2);
 
-      const stats = await getQueueStats();
-      expect(stats.waiting).toBe(2);
+      expect(firstId).not.toBe(secondId);
     });
   });
 

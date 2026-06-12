@@ -123,8 +123,14 @@ router.post('/:id/send', emailSendLimiter, campaignSendLimiter, validateRequest(
       await emailQueue.add({ emailId: email.id, campaignId: campaign.id, contactId: contact.id });
     }
 
+    const failedCount = await Email.count({ where: { campaignId: campaign.id, status: 'failed' } });
+    await campaign.update({
+      status: failedCount ? 'paused' : 'sent',
+      sentAt: failedCount ? null : new Date()
+    });
+
     console.log(`[CAMPAIGN SEND] ✅ Campaign send initiated for ${contacts.length} contacts\n`);
-    res.json({ success: true, emailCount: contacts.length });
+    res.json({ success: failedCount === 0, emailCount: contacts.length, failedCount });
   } catch (error) {
     console.error(`[CAMPAIGN SEND] ❌ Error:`, error);
     res.status(500).json({ error: error.message });

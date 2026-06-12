@@ -1,7 +1,10 @@
 import express from 'express';
+import { Op } from 'sequelize';
 import Email from '../models/Email.js';
+import { requireWebhookSecret } from '../middleware/security.js';
 
 const router = express.Router();
+router.use(requireWebhookSecret);
 
 router.post('/sendgrid', async (req, res) => {
   const events = Array.isArray(req.body) ? req.body : [];
@@ -42,7 +45,7 @@ router.post('/bounce', async (req, res) => {
         failureReason: failureReason.substring(0, 500)
       },
       {
-        where: { recipientEmail: email, status: { [require('sequelize').Op.notIn]: ['bounced', 'sent', 'opened', 'clicked'] } }
+        where: { recipientEmail: email, status: { [Op.notIn]: ['bounced', 'sent', 'opened', 'clicked'] } }
       }
     );
 

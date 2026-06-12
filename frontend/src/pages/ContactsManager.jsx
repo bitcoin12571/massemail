@@ -35,6 +35,7 @@ export default function ContactsManager() {
   const [contactDialog, setContactDialog] = useState(false);
   const [form, setForm] = useState({ name: '', email: '' });
   const [notice, setNotice] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const load = async () => {
     try {
@@ -51,6 +52,7 @@ export default function ContactsManager() {
   }, [search]);
 
   const addContact = async () => {
+    setLoading(true);
     try {
       await API.post('/contacts', form);
       setForm({ name: '', email: '' });
@@ -59,12 +61,20 @@ export default function ContactsManager() {
       load();
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not add this email') });
+    } finally {
+      setLoading(false);
     }
   };
 
   const importCSV = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setNotice({ type: 'error', text: 'CSV file must be 5 MB or smaller' });
+      event.target.value = '';
+      return;
+    }
+    setLoading(true);
     try {
       const csvData = await file.text();
       const { data } = await API.post('/contacts/import', { csvData });
@@ -73,13 +83,23 @@ export default function ContactsManager() {
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, 'CSV import failed') });
     } finally {
+      setLoading(false);
       event.target.value = '';
     }
   };
 
   const remove = async (id) => {
-    await API.delete(`/contacts/${id}`);
-    setContacts((current) => current.filter((contact) => contact.id !== id));
+    if (!window.confirm('Delete this contact?')) return;
+    setLoading(true);
+    try {
+      await API.delete(`/contacts/${id}`);
+      setContacts((current) => current.filter((contact) => contact.id !== id));
+      setNotice({ type: 'success', text: 'Contact deleted' });
+    } catch (error) {
+      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not delete this contact') });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -91,10 +111,10 @@ export default function ContactsManager() {
           <Typography color="text.secondary">{t('importHelp')}</Typography>
         </Box>
         <Stack direction="row" spacing={1.25}>
-          <Button component="label" variant="outlined" startIcon={<Upload size={18} />}>
+          <Button component="label" variant="outlined" startIcon={<Upload size={18} />} disabled={loading}>
             {t('importCsv')}<input hidden type="file" accept=".csv,text/csv" onChange={importCSV} />
           </Button>
-          <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setContactDialog(true)}>{t('addEmail')}</Button>
+          <Button variant="contained" startIcon={<Plus size={18} />} disabled={loading} onClick={() => setContactDialog(true)}>{t('addEmail')}</Button>
         </Stack>
       </Box>
 
@@ -128,7 +148,7 @@ export default function ContactsManager() {
                   <Box><Typography fontWeight={700}>{contact.name || 'Unnamed recipient'}</Typography><Typography variant="body2" color="text.secondary">{contact.email}</Typography></Box>
                 </Box>
                 <Chip label={contact.status} size="small" className="status-active" />
-                <IconButton onClick={(event) => { event.stopPropagation(); remove(contact.id); }}><Trash2 size={17} /></IconButton>
+                <IconButton disabled={loading} aria-label={`Delete ${contact.email}`} onClick={(event) => { event.stopPropagation(); remove(contact.id); }}><Trash2 size={17} /></IconButton>
               </Box>
             ))}
           </Box>
@@ -151,7 +171,7 @@ export default function ContactsManager() {
           <TextField label={t('fullName')} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
           <TextField label={t('emailAddress')} type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
         </DialogContent>
-        <DialogActions sx={{ p: 3 }}><Button onClick={() => setContactDialog(false)}>{t('cancel')}</Button><Button variant="contained" disabled={!form.email} onClick={addContact}>{t('addDatabase')}</Button></DialogActions>
+        <DialogActions sx={{ p: 3 }}><Button disabled={loading} onClick={() => setContactDialog(false)}>{t('cancel')}</Button><Button variant="contained" disabled={loading || !form.email} onClick={addContact}>{t('addDatabase')}</Button></DialogActions>
       </Dialog>
 
       <Snackbar open={Boolean(notice)} autoHideDuration={4500} onClose={() => setNotice(null)}>

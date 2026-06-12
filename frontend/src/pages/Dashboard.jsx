@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Avatar,
   Box,
   Button,
   IconButton,
+  LinearProgress,
   Stack,
   Typography
 } from '@mui/material';
@@ -17,14 +18,15 @@ import {
   Menu,
   Search
 } from 'lucide-react';
-import CampaignDashboard from './CampaignDashboard';
-import QueueMonitor from '../components/QueueMonitor';
-import ContactsManager from './ContactsManager';
-import SendEmail from './SendEmail';
 import { useLanguage } from '../i18n.jsx';
 import { pageTransition } from '../utils/animations';
 import AnimatedLanguageSwitcher from '../components/AnimatedLanguageSwitcher';
 import smartGrowthLogo from '../assets/smart-growth-ai-logo.png';
+
+const CampaignDashboard = lazy(() => import('./CampaignDashboard'));
+const QueueMonitor = lazy(() => import('../components/QueueMonitor'));
+const ContactsManager = lazy(() => import('./ContactsManager'));
+const SendEmail = lazy(() => import('./SendEmail'));
 
 export default function Dashboard({ user, onLogout }) {
   const { t } = useLanguage();
@@ -103,52 +105,54 @@ export default function Dashboard({ user, onLogout }) {
         </Box>
 
         <Box className="page-content">
-          <AnimatePresence mode="wait">
-            {activePage === 0 && (
-              <motion.div
-                key="contacts"
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                variants={pageTransition}
-              >
-                <ContactsManager mode="database" />
-              </motion.div>
-            )}
-            {activePage === 1 && (
-              <motion.div
-                key="send"
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                variants={pageTransition}
-              >
-                <SendEmail onOpenSettings={() => setActivePage(4)} />
-              </motion.div>
-            )}
-            {activePage === 2 && (
-              <motion.div
-                key="campaign"
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                variants={pageTransition}
-              >
-                <CampaignDashboard onOpenDatabase={() => setActivePage(1)} />
-              </motion.div>
-            )}
-            {activePage === 3 && (
-              <motion.div
-                key="queue"
-                initial="initial"
-                animate="animate"
-                exit="exit"
-                variants={pageTransition}
-              >
-                <QueueMonitor />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <Suspense fallback={<LinearProgress aria-label="Loading page" />}>
+            <AnimatePresence mode="wait">
+              {activePage === 0 && (
+                <motion.div
+                  key="contacts"
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  variants={pageTransition}
+                >
+                  <ContactsManager mode="database" />
+                </motion.div>
+              )}
+              {activePage === 1 && (
+                <motion.div
+                  key="send"
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  variants={pageTransition}
+                >
+                  <SendEmail />
+                </motion.div>
+              )}
+              {activePage === 2 && (
+                <motion.div
+                  key="campaign"
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  variants={pageTransition}
+                >
+                  <CampaignDashboard onOpenDatabase={() => setActivePage(1)} />
+                </motion.div>
+              )}
+              {activePage === 3 && (
+                <motion.div
+                  key="queue"
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  variants={pageTransition}
+                >
+                  <QueueMonitor />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </Suspense>
         </Box>
       </Box>
     </Box>

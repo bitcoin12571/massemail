@@ -102,24 +102,18 @@ export function EmailPreviewModalCompose({ open, onClose, subject, htmlContent, 
                 {t('emailContent') || 'Email Content'}
               </Typography>
               <Box
+                component="iframe"
+                title={t('emailPreview') || 'Email Preview'}
+                sandbox=""
+                srcDoc={personalizedHtml}
                 sx={{
                   border: '1px solid',
                   borderColor: 'divider',
                   borderRadius: 1,
-                  p: 2,
-                  bgcolor: 'background.paper',
-                  minHeight: 300,
-                  maxHeight: 500,
-                  overflow: 'auto',
-                  fontFamily: 'system-ui, -apple-system, sans-serif',
-                  fontSize: '14px',
-                  lineHeight: '1.6',
-                  '& img': {
-                    maxWidth: '100%',
-                    height: 'auto'
-                  }
+                  width: '100%',
+                  minHeight: 360,
+                  bgcolor: 'background.paper'
                 }}
-                dangerouslySetInnerHTML={{ __html: personalizedHtml }}
               />
             </Box>
           </>

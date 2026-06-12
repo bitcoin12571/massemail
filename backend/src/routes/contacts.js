@@ -1,5 +1,4 @@
 import express from 'express';
-import multer from 'multer';
 import { Op } from 'sequelize';
 import Contact from '../models/Contact.js';
 import Campaign from '../models/Campaign.js';
@@ -9,6 +8,8 @@ import { isRealEmailDeliveryConfigured } from '../services/emailService.js';
 import { parseCSV } from '../utils/csvParser.js';
 import { validateRequest, validateQuery } from '../middleware/validation.js';
 import { contactSchema, bulkContactSchema, quickEmailSchema } from '../schemas/email.schema.js';
+import { contactImportLimiter, emailSendLimiter } from '../middleware/rateLimiter.js';
+import { attachmentUpload, serializeUploadedFiles } from '../middleware/upload.js';
 import {
   generateVerificationToken,
   isTokenExpired,
@@ -17,11 +18,6 @@ import {
 } from '../services/verificationService.js';
 
 const router = express.Router();
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 5 }
-});
 
 // Email validation regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -104,7 +100,7 @@ router.post('/', validateRequest(contactSchema), async (req, res) => {
 });
 
 // Import CSV
-router.post('/import', async (req, res) => {
+router.post('/import', contactImportLimiter, async (req, res) => {
   try {
     const { csvData } = req.body;
     const parsed = parseCSV(csvData);
@@ -132,7 +128,7 @@ router.post('/import', async (req, res) => {
   }
 });
 
-router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
+router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments', 5), async (req, res) => {
   try {
     console.log('[SEND-NOW] Request received');
     console.log('[SEND-NOW] User ID:', req.user?.id);
@@ -225,16 +221,13 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
       .replaceAll('"', '&quot;')
       .replaceAll('\n', '<br>');
 
+    const attachments = serializeUploadedFiles(req.files);
     const campaign = await Campaign.create({
       name: `Quick send - ${new Date().toLocaleString('en-GB')}`,
       subject: subject.trim(),
       htmlContent: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
       textContent: message.trim(),
-      attachments: (req.files || []).map((file) => ({
-        filename: file.originalname,
-        contentType: file.mimetype,
-        content: file.buffer.toString('base64')
-      })),
+      attachments,
       status: 'sending',
       createdBy: req.user.id
     });
@@ -255,12 +248,6 @@ router.post('/send-now', upload.array('attachments', 5), async (req, res) => {
     const results = await Promise.allSettled(
       emailRecords.map(async ({ email, contact }) => {
         try {
-          const attachments = (req.files || []).map((file) => ({
-            filename: file.originalname,
-            contentType: file.mimetype,
-            content: file.buffer.toString('base64')
-          }));
-
           console.log(`[SEND-NOW] Sending to ${contact.email} with ${attachments.length} attachments`);
 
           const result = await sendEmail({

@@ -170,6 +170,16 @@ export async function verifyEmailConnection() {
   return { success: true, message: `${settings.provider.toUpperCase()} connection verified successfully.` };
 }
 
+export function normalizeAttachments(input = []) {
+  return input.map((attachment, index) => ({
+    filename: attachment.filename || `attachment_${index}`,
+    content: Buffer.isBuffer(attachment.content)
+      ? attachment.content
+      : Buffer.from(attachment.content, 'base64'),
+    contentType: attachment.contentType || 'application/octet-stream'
+  }));
+}
+
 export async function sendEmail(emailData) {
   if (!transporter) await initializeEmailService();
 
@@ -185,12 +195,14 @@ export async function sendEmail(emailData) {
   if (settings.provider === 'resend' && resendClient) {
     try {
       console.log('[EMAIL SERVICE] Using Resend provider');
+      const attachments = normalizeAttachments(emailData.attachments);
       const result = await resendClient.emails.send({
         from: settings.senderEmail,
         to: emailData.to,
         subject: emailData.subject,
         html: emailData.personalizedHtml || emailData.html,
         text: emailData.personalizedText || emailData.text,
+        attachments: attachments.length > 0 ? attachments : undefined
       });
 
       if (result.error) {
@@ -233,30 +245,7 @@ export async function sendEmail(emailData) {
     //   }
     // }
 
-    // Process attachments: all as regular attachments (not inline)
-    // This is more compatible with Gmail
-    const attachments = [];
-
-    if (emailData.attachments && emailData.attachments.length > 0) {
-      console.log(`[EMAIL SERVICE] Processing ${emailData.attachments.length} attachments`);
-
-      emailData.attachments.forEach((att, idx) => {
-        try {
-          const buffer = Buffer.isBuffer(att.content)
-            ? att.content
-            : Buffer.from(att.content, 'base64');
-
-          attachments.push({
-            filename: att.filename || `attachment_${idx}`,
-            content: buffer,
-            contentType: att.contentType || 'application/octet-stream'
-          });
-          console.log(`[EMAIL SERVICE] Added attachment: ${att.filename} (${att.contentType})`);
-        } catch (err) {
-          console.error(`[EMAIL SERVICE] Error processing attachment ${att.filename}:`, err.message);
-        }
-      });
-    }
+    const attachments = normalizeAttachments(emailData.attachments);
 
     console.log(`[EMAIL SERVICE] Total attachments to send: ${attachments.length}`);
 

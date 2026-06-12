@@ -126,20 +126,18 @@ export function EmailPreviewModal({ open, onClose, campaignId, selectedContacts 
                 {t('emailContent') || 'Email Content'}
               </Typography>
               <Box
+                component="iframe"
+                title={t('emailPreview') || 'Email Preview'}
+                sandbox=""
+                srcDoc={preview.htmlContent}
                 sx={{
                   border: '1px solid',
                   borderColor: 'divider',
                   borderRadius: 1,
-                  p: 2,
-                  bgcolor: 'background.paper',
-                  minHeight: 300,
-                  maxHeight: 500,
-                  overflow: 'auto',
-                  fontFamily: 'system-ui, -apple-system, sans-serif',
-                  fontSize: '14px',
-                  lineHeight: '1.6'
+                  width: '100%',
+                  minHeight: 360,
+                  bgcolor: 'background.paper'
                 }}
-                dangerouslySetInnerHTML={{ __html: preview.htmlContent }}
               />
             </Box>
 
