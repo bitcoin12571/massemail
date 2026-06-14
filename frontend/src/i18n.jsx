@@ -134,9 +134,12 @@ const translations = {
     ,aiImproving: 'Improving...'
     ,aiImproveSuccess: 'The email was improved. Review it before sending.'
     ,aiImproveFailed: 'The email could not be improved.'
+    emailParser: 'Email Parser'
+    , bulkSender: 'Bulk Sender'
   },
   ro: {
-    emailDatabase: 'Baza de emailuri', sendHistory: 'Istoric trimiteri', deliveryStatus: 'Starea livrărilor', systemSettings: 'Setări sistem',
+    emailDatabase: 'Baza de emailuri', sendHistory: 'Istoric trimiteri', deliveryStatus: 'Starea livrărilor', systemSettings: 'Setări sistem'
+    , emailParser: 'Email Parser', bulkSender: 'Bulk Sender'
     companyTools: 'INSTRUMENTE COMPANIE', administrator: 'Administrator', companyAccess: 'Acces companie', searchDatabase: 'Caută în baza de emailuri...',
     databaseEyebrow: 'BAZA COMPANIEI', databaseTitle: 'Baza de emailuri', databaseSubtitle: 'Selectează clienții și trimite același email tuturor cu un singur click.',
     importCsv: 'Importă CSV', addEmail: 'Adaugă email', companyRecipients: 'Clienții companiei', addressesAvailable: '{count} adrese de email disponibile',
@@ -250,6 +253,8 @@ const translations = {
     ,aiImproving: 'Улучшение...'
     ,aiImproveSuccess: 'Письмо улучшено. Проверьте его перед отправкой.'
     ,aiImproveFailed: 'Не удалось улучшить письмо.'
+    ,emailParser: 'Парсер Email'
+    ,bulkSender: 'Массовая рассылка'
   }
 };
 
