@@ -14,6 +14,8 @@ import webhookRoutes from './routes/webhooks.js';
 import settingsRoutes from './routes/settings.js';
 import aiRoutes from './routes/ai.js';
 import queueRoutes from './routes/queue.js';
+import parserRoutes from './routes/parser.js';
+import bulkSenderRoutes from './routes/bulkSender.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { securityHeaders } from './middleware/security.js';
@@ -25,6 +27,9 @@ import './models/Contact.js';
 import './models/Email.js';
 import './models/SystemSetting.js';
 import './models/JobQueue.js';
+import './models/ParsedEmail.js';
+import './models/BulkCampaign.js';
+import './models/BulkCampaignSend.js';
 
 // Load .env only in development (Vercel uses environment variables)
 if (process.env.NODE_ENV !== 'production') {
@@ -90,6 +95,8 @@ app.use('/api/campaigns', authMiddleware, campaignRoutes);
 app.use('/api/settings', authMiddleware, settingsRoutes);
 app.use('/api/ai', authMiddleware, aiRoutes);
 app.use('/api/queue', authMiddleware, queueRoutes);
+app.use('/api/parser', authMiddleware, parserRoutes);
+app.use('/api/bulk-sender', authMiddleware, bulkSenderRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

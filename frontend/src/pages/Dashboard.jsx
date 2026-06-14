@@ -16,7 +16,9 @@ import {
   LogOut,
   MailPlus,
   Menu,
-  Search
+  Search,
+  Send,
+  Upload
 } from 'lucide-react';
 import { useLanguage } from '../i18n.jsx';
 import { pageTransition } from '../utils/animations';
@@ -27,6 +29,8 @@ const CampaignDashboard = lazy(() => import('./CampaignDashboard'));
 const QueueMonitor = lazy(() => import('../components/QueueMonitor'));
 const ContactsManager = lazy(() => import('./ContactsManager'));
 const SendEmail = lazy(() => import('./SendEmail'));
+const EmailParser = lazy(() => import('../components/EmailParser'));
+const BulkSender = lazy(() => import('../components/BulkSender'));
 
 export default function Dashboard({ user, onLogout }) {
   const { t } = useLanguage();
@@ -36,7 +40,9 @@ export default function Dashboard({ user, onLogout }) {
     { label: t('emailDatabase'), icon: ContactRound },
     { label: t('sendNow'), icon: MailPlus },
     { label: t('sendHistory'), icon: History },
-    { label: t('deliveryStatus'), icon: BarChart3 }
+    { label: t('deliveryStatus'), icon: BarChart3 },
+    { label: 'Email Parser', icon: Upload },
+    { label: 'Bulk Sender', icon: Send }
   ];
 
   return (
@@ -149,6 +155,28 @@ export default function Dashboard({ user, onLogout }) {
                   variants={pageTransition}
                 >
                   <QueueMonitor />
+                </motion.div>
+              )}
+              {activePage === 4 && (
+                <motion.div
+                  key="parser"
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  variants={pageTransition}
+                >
+                  <EmailParser />
+                </motion.div>
+              )}
+              {activePage === 5 && (
+                <motion.div
+                  key="bulksender"
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  variants={pageTransition}
+                >
+                  <BulkSender />
                 </motion.div>
               )}
             </AnimatePresence>
