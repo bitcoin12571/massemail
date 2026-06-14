@@ -1,0 +1,174 @@
+# CODEBASE EXPLORATION - MAILORA EMAIL DASHBOARD
+
+## 1. PROJECT OVERVIEW
+- Full-stack: React + Express
+- DB: SQLite (dev) / PostgreSQL (prod)
+- UI: Material-UI, Framer Motion
+- ORM: Sequelize
+
+## 2. DELIVERY STATUS PAGE ("STAREA LIVRĂRILOR")
+
+### Key Files
+- Frontend: /frontend/src/components/QueueMonitor.jsx (main component)
+- Backend: /backend/src/services/queueService.js (queue logic)
+- Backend: /backend/src/routes/campaigns.js (API endpoints)
+- Navigation: /frontend/src/pages/Dashboard.jsx (activePage 3)
+
+### Frontend Component: QueueMonitor.jsx
+- Displays: 4 stat cards (waiting, sending now, delivered, failed)
+- Actions: Refresh, Clear Failed, Retry Failed
+- Auto-refresh from UserPreferencesContext
+- API calls:
+  * GET /campaigns/stats/queue
+  * POST /campaigns/stats/queue/clear
+  * POST /campaigns/stats/queue/retry
+
+### Backend Queue Service
+- In-memory job queue (jobs array)
+- In-memory stats (waiting, active, completed, failed)
+- Functions:
+  * emailQueue.add() - add and process immediately
+  * processJobs() - process 50 at a time in parallel
+  * getQueueStats() - return current stats
+  * retryFailedJobs() - query DB for failed, requeue
+  * clearFailedJobs() - reset failed count
+
+### API Endpoints (campaigns.js)
+GET  /campaigns/stats/queue
+POST /campaigns/stats/queue/clear
+POST /campaigns/stats/queue/retry
+POST /campaigns/:id/send
+GET  /campaigns/:id/emails
+GET  /campaigns/:id/analytics
+
+## 3. DATA MODELS
+
+### Email (Persisted in Database)
+id: UUID
+campaignId: UUID
+contactId: UUID
+recipientEmail: STRING
+status: ENUM [pending, sent, delivered, opened, clicked, failed, bounced, unsubscribed]
+sendgridMessageId: STRING
+sentAt: DATE
+deliveredAt: DATE
+openedAt: DATE
+clickedAt: DATE
+failureReason: TEXT (500 chars max)
+createdAt, updatedAt: DATE
+
+Indexes: campaignId, contactId, status
+
+### Campaign (Persisted in Database)
+id: UUID
+name, subject: STRING
+htmlContent, textContent: TEXT
+status: ENUM [draft, scheduled, sending, sent, paused]
+scheduledAt, sentAt: DATE
+attachments: JSON
+createdBy: UUID
+
+### Contact (Persisted in Database)
+id: UUID
+email: STRING (unique)
+name: STRING
+tags: JSON
+status: ENUM [active, inactive, bounced, unsubscribed]
+verified: BOOLEAN
+customData: JSON
+createdBy: UUID
+
+## 4. STATE MANAGEMENT
+
+### Frontend State
+QueueMonitor:
+- stats: { waiting, active, completed, failed, total }
+- loading: boolean
+- notice: { type, text }
+
+UserPreferencesContext (localStorage):
+- refreshInterval: 2500 ms (default)
+- autoRefreshQueue: true (default)
+- theme, animationsEnabled, notificationsEnabled, compactMode
+
+### Backend State
+Queue Service (IN-MEMORY - LOST ON RESTART):
+- jobs: Job array
+- stats: { waiting, active, completed, failed }
+- processing: boolean
+- nextId: Job counter
+
+Database (PERSISTED):
+- Email records with status
+- Campaign records with status
+- Contact records
+
+## 5. DATA PERSISTENCE
+
+Queue: IN-MEMORY (lost on restart)
+Stats: IN-MEMORY (lost on restart)
+Email Status: DATABASE (Email model)
+User Preferences: localStorage
+Database: SQLite (/mailora.sqlite) or PostgreSQL
+
+## 6. PROCESSING FLOW
+
+1. User sends campaign
+2. Email records created (status: pending)
+3. Each email added to in-memory jobs array
+4. processJobs() called immediately
+5. 50 emails processed in parallel
+6. Email records updated (sent/failed)
+7. In-memory stats updated
+
+## 7. FAILURE HANDLING
+
+Failed emails stored in Email.failureReason
+retryFailedJobs():
+  - Query Email table for status='failed'
+  - Update to status='pending'
+  - Add to job queue
+  - Process again
+
+clearFailedJobs():
+  - Reset stats.failed to 0
+  - Does NOT delete database records
+
+## 8. TRANSLATIONS (i18n.jsx)
+
+English:
+- deliveryStatus: "Delivery status"
+- deliveryTitle: "Delivery status"
+- deliverySubtitle: "Follow every delivery job and resolve failures quickly."
+- waiting, sendingNow, delivered, failed
+- deliveryProgress, clearFailed, retryFailed
+- queueReady, queueReadyHelp, refresh
+
+Romanian:
+- deliveryStatus: "Starea livrărilor"
+- deliveryTitle: "Starea livrărilor"
+- deliverySubtitle: "Urmărește trimiterile și rezolvă erorile."
+- waiting: "În așteptare"
+- sendingNow: "Se trimite"
+- delivered: "Livrată"
+- failed: "Nereușite"
+
+## 9. ARCHITECTURE LIMITATIONS
+
+1. In-memory queue: Lost on server restart
+2. Stats not persisted: Reset on restart
+3. Single server only: No multi-instance
+4. No job history: Only Email table tracks results
+5. Immediate processing: No scheduling/delay
+
+## 10. KEY FINDINGS
+
+- QueueMonitor is the delivery status page
+- Queue is in-memory, not persistent
+- Email status is persisted in database
+- Stats are in-memory, not persistent
+- Auto-refresh uses UserPreferencesContext
+- Processing is 50 emails at a time in parallel
+- Failed emails stored with failureReason (500 chars)
+- Retry queries database for failed emails
+- No Redis or external queue service

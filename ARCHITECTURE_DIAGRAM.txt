@@ -1,0 +1,229 @@
+# MAILORA DELIVERY STATUS - ARCHITECTURE DIAGRAM
+
+## FRONTEND COMPONENT TREE
+
+App.jsx (root)
+  └─ Dashboard.jsx (main shell)
+      ├─ Navigation (4 pages)
+      │   ├─ Page 0: ContactsManager (database)
+      │   ├─ Page 1: SendEmail (compose)
+      │   ├─ Page 2: CampaignDashboard (history)
+      │   └─ Page 3: QueueMonitor ← DELIVERY STATUS
+      │       ├─ Page Heading
+      │       ├─ Stats Grid
+      │       │   ├─ Card: waiting (Clock3)
+      │       │   ├─ Card: sending (Zap)
+      │       │   ├─ Card: delivered (CheckCircle2)
+      │       │   └─ Card: failed (RotateCcw)
+      │       ├─ Queue Panel
+      │       │   ├─ QueueVisualization (Recharts chart)
+      │       │   ├─ Button: Clear Failed
+      │       │   ├─ Button: Retry Failed
+      │       │   └─ Snackbar: notifications
+      │       └─ UserPreferencesContext (refresh interval)
+
+## FRONTEND DATA FLOW
+
+QueueMonitor Component
+  ↓ (useEffect on mount)
+  fetchStats()
+    ↓
+  API.get('/campaigns/stats/queue')
+    ↓
+  setStats(response.data)
+    ↓
+  Display in cards + chart
+
+Auto-Refresh Loop
+  ↓ (if autoRefreshQueue && refreshInterval)
+  setInterval(fetchStats, refreshInterval)
+    ↓
+  Updates every 2.5s (default)
+
+User Action (Clear Failed)
+  ↓
+  action('/campaigns/stats/queue/clear')
+    ↓
+  API.post('/campaigns/stats/queue/clear')
+    ↓
+  fetchStats()
+    ↓
+  Update display
+
+## BACKEND FLOW
+
+Express Routes (campaigns.js)
+  ├─ GET /campaigns/stats/queue
+  │   ↓
+  │   getQueueStats() [from queueService.js]
+  │     ↓
+  │     Return: { waiting, active, completed, failed, total }
+  │
+  ├─ POST /campaigns/stats/queue/clear
+  │   ↓
+  │   clearFailedJobs() [from queueService.js]
+  │     ↓
+  │     stats.failed = 0
+  │     ↓
+  │     Return: { cleared: count }
+  │
+  └─ POST /campaigns/stats/queue/retry
+      ↓
+      retryFailedJobs() [from queueService.js]
+        ↓
+        Email.findAll({ status: 'failed' })
+        ↓
+        For each:
+          - Update to status: 'pending'
+          - emailQueue.add()
+        ↓
+        processJobs()
+        ↓
+        Return: { retried: count }
+
+## QUEUE SERVICE INTERNALS
+
+queueService.js (In-Memory Module)
+  ├─ jobs = []                    [Job array - LOST ON RESTART]
+  ├─ stats = {                    [Stats object - LOST ON RESTART]
+  │   waiting: 0,
+  │   active: 0,
+  │   completed: 0,
+  │   failed: 0
+  │ }
+  ├─ processing = false           [Flag]
+  ├─ nextId = 1                   [Job ID counter]
+  │
+  └─ Functions:
+      ├─ emailQueue.add(data)
+      │   ├─ jobId = nextId++
+      │   ├─ jobs.push({ id: jobId, ...data })
+      │   ├─ stats.waiting++
+      │   └─ await processJobs()
+      │
+      ├─ processJobs()
+      │   ├─ while (jobs.length > 0)
+      │   │   ├─ Batch 50 jobs from queue
+      │   │   ├─ For each job in parallel:
+      │   │   │   ├─ Fetch Email, Campaign, Contact records
+      │   │   │   ├─ Personalize content
+      │   │   │   ├─ await sendEmail()
+      │   │   │   ├─ Update Email.status = 'sent'
+      │   │   │   ├─ stats.completed++
+      │   │   │   └─ (on error) Email.status = 'failed', stats.failed++
+      │   │   └─ stats.active--
+      │   └─ processing = false
+      │
+      ├─ getQueueStats()
+      │   └─ Return { ...stats, total: ... }
+      │
+      ├─ clearFailedJobs()
+      │   ├─ count = stats.failed
+      │   ├─ stats.failed = 0
+      │   └─ Return count
+      │
+      └─ retryFailedJobs()
+          ├─ failedEmails = Email.findAll({ status: 'failed' })
+          ├─ For each failed email:
+          │   ├─ Update Email.status = 'pending'
+          │   └─ emailQueue.add(jobData)
+          └─ await processJobs()
+
+## DATABASE FLOW
+
+Email Table (Persisted)
+  ├─ When campaign sent:
+  │   └─ Create Email record (status: 'pending')
+  │
+  ├─ During processing:
+  │   └─ Update Email record
+  │       ├─ status: 'sent'
+  │       ├─ sentAt: now
+  │       ├─ sendgridMessageId: id
+  │       └─ (on error) failureReason: error.message
+  │
+  └─ For retry:
+      └─ Query Email.findAll({ status: 'failed' })
+
+Campaign Table
+  └─ Update status based on failures:
+      ├─ status: 'sent' (if no failures)
+      └─ status: 'paused' (if failures)
+
+Contact Table
+  └─ Used for personalization data
+
+## STATE PERSISTENCE MATRIX
+
+┌─────────────────┬──────────────┬────────────┐
+│ Data            │ Storage      │ Lost?      │
+├─────────────────┼──────────────┼────────────┤
+│ Job Queue       │ Memory array │ YES ↻      │
+│ Stats           │ Memory obj   │ YES ↻      │
+│ Email Status    │ Database     │ NO (✓)     │
+│ Campaign Status │ Database     │ NO (✓)     │
+│ Contact Data    │ Database     │ NO (✓)     │
+│ User Prefs      │ localStorage │ NO (✓)     │
+└─────────────────┴──────────────┴────────────┘
+
+## EMAIL PROCESSING PIPELINE
+
+Campaign.send() endpoint
+  ↓
+Create Email records (status: pending)
+  ↓
+For each email:
+  emailQueue.add({
+    emailId,
+    campaignId,
+    contactId
+  })
+  ↓
+processJobs() [immediate, not deferred]
+  ↓
+Batch 50 emails
+  ↓
+For each in parallel:
+  ├─ Fetch Email, Campaign, Contact
+  ├─ Personalize content
+  ├─ sendEmail()
+  │   ├─ Via Nodemailer (SMTP)
+  │   ├─ Via SendGrid (SMTP relay)
+  │   ├─ Via Resend (API)
+  │   └─ Via Preview (JSON)
+  ├─ Update Email.status
+  │   ├─ 'sent' (success)
+  │   └─ 'failed' (error)
+  └─ Update stats (completed/failed)
+  ↓
+Update Campaign.status
+  ├─ 'sent' (no failures)
+  └─ 'paused' (has failures)
+
+## KEY CHARACTERISTICS
+
+✓ In-Memory Queue:
+  - Advantages: Fast, immediate processing
+  - Disadvantages: Lost on restart, no persistence
+
+✓ Immediate Processing:
+  - No scheduling/delay
+  - Processing starts right after job added
+
+✓ Parallel Batching:
+  - 50 emails at a time
+  - Promise.allSettled for error handling
+
+✓ Database Persistence:
+  - Final status persisted
+  - Recoverable on restart
+
+✓ Stats Not Persisted:
+  - Reset on server restart
+  - Only shows current session activity
+
+✓ Auto-Refresh:
+  - Frontend polls /stats/queue
+  - Interval from UserPreferencesContext
+  - Default: 2.5 seconds
+
