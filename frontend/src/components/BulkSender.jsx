@@ -223,53 +223,53 @@ export default function BulkSender() {
 
       {/* Create Campaign Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create New Campaign</DialogTitle>
+        <DialogTitle>Crează Campanie Nouă</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={2}>
             <TextField
-              label="Campaign Name"
+              label="Nume Campanie"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               fullWidth
             />
             <TextField
-              label="Email Subject"
+              label="Subiect Email"
               value={formData.subject}
               onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
               fullWidth
             />
             <FormControl fullWidth>
-              <InputLabel>Target Region (Optional)</InputLabel>
+              <InputLabel>Regiunea Țintă (Opțional)</InputLabel>
               <Select
                 value={formData.region}
                 onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                label="Target Region"
+                label="Regiunea Țintă"
               >
-                <MenuItem value="">All Regions</MenuItem>
+                <MenuItem value="">Toate Regiunile</MenuItem>
                 {regions.map((region) => (
                   <MenuItem key={region} value={region}>{region}</MenuItem>
                 ))}
               </Select>
             </FormControl>
             <TextField
-              label="Email HTML Template"
+              label="Template HTML Email"
               value={formData.htmlTemplate}
               onChange={(e) => setFormData({ ...formData, htmlTemplate: e.target.value })}
               multiline
               rows={6}
               fullWidth
-              helperText="Use {{name}}, {{email}}, {{region}} for personalization"
+              helperText="Folosește {{name}}, {{email}}, {{region}} pentru personalizare"
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>Cancel</Button>
+          <Button onClick={() => setOpenDialog(false)}>Anulează</Button>
           <Button
             variant="contained"
             onClick={handleCreateCampaign}
             disabled={loading}
           >
-            Create Campaign
+            Crează Campanie
           </Button>
         </DialogActions>
       </Dialog>

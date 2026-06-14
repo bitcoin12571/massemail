@@ -95,18 +95,18 @@ export default function EmailParser() {
     <>
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">BULK EMAIL</Typography>
-          <Typography variant="h3">Email Parser & Segmentation</Typography>
-          <Typography color="text.secondary">Import and organize emails by region</Typography>
+          <Typography className="eyebrow">EMAIL MASIV</Typography>
+          <Typography variant="h3">Parser & Segmentare Email</Typography>
+          <Typography color="text.secondary">Importă și organizează emailuri pe regiuni</Typography>
         </Box>
       </Box>
 
       <Stack spacing={3}>
         {/* CSV Upload Section */}
         <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>📤 Upload CSV File</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>📤 Upload Fișier CSV</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Format: email, name, region (one per line)
+            Format: email, nume, regiunea (one per line)
           </Typography>
 
           <Stack spacing={2}>
@@ -120,7 +120,7 @@ export default function EmailParser() {
             <TextField
               multiline
               rows={6}
-              placeholder="Or paste CSV content here..."
+              placeholder="Sau paste conținut CSV aici..."
               value={csvContent}
               onChange={(e) => setCsvContent(e.target.value)}
               variant="outlined"
@@ -134,7 +134,7 @@ export default function EmailParser() {
                 onClick={handleParseCsv}
                 disabled={loading || !csvContent.trim()}
               >
-                {loading ? 'Processing...' : 'Parse & Import'}
+                {loading ? 'Se procesează...' : 'Parse & Import'}
               </Button>
 
               <Button
@@ -142,7 +142,7 @@ export default function EmailParser() {
                 onClick={handleValidateEmails}
                 disabled={loading || regionStats.length === 0}
               >
-                Validate All Emails
+                Validează Emailuri
               </Button>
             </Stack>
           </Stack>
@@ -155,13 +155,13 @@ export default function EmailParser() {
               <Stack direction="row" spacing={3} alignItems="center">
                 <CheckCircle2 size={32} color="#10b981" />
                 <Box>
-                  <Typography variant="h6">✅ Import Successful!</Typography>
+                  <Typography variant="h6">✅ Import Reușit!</Typography>
                   <Typography variant="body2">
-                    {results.validEmails} valid emails imported from {results.totalProcessed} rows
+                    {results.validEmails} emailuri valide importate din {results.totalProcessed} rânduri
                   </Typography>
                   {results.errors.length > 0 && (
                     <Typography variant="caption" color="error">
-                      {results.errors.length} errors found
+                      {results.errors.length} erori găsite
                     </Typography>
                   )}
                 </Box>
@@ -172,16 +172,16 @@ export default function EmailParser() {
 
         {/* Region Statistics */}
         <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>📊 Region Statistics</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>📊 Statistici Regiuni</Typography>
 
           {regionStats.length > 0 ? (
             <Box sx={{ overflowX: 'auto' }}>
               <Table>
                 <TableHead>
                   <TableRow sx={{ backgroundColor: '#f3f4f6' }}>
-                    <TableCell><MapPin size={18} /> Region</TableCell>
-                    <TableCell align="right"><Mail size={18} /> Email Count</TableCell>
-                    <TableCell align="right">Percentage</TableCell>
+                    <TableCell><MapPin size={18} /> Regiunea</TableCell>
+                    <TableCell align="right"><Mail size={18} /> Nr. Emailuri</TableCell>
+                    <TableCell align="right">Procent</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -193,7 +193,7 @@ export default function EmailParser() {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <MapPin size={16} />
-                            {stat.region || 'unknown'}
+                            {stat.region || 'necunoscut'}
                           </Box>
                         </TableCell>
                         <TableCell align="right">{stat.count}</TableCell>
@@ -210,7 +210,7 @@ export default function EmailParser() {
               </Table>
             </Box>
           ) : (
-            <Typography color="text.secondary">No data yet. Upload a CSV to get started.</Typography>
+            <Typography color="text.secondary">Nicio dată încă. Upload un CSV pentru a începe.</Typography>
           )}
         </Paper>
       </Stack>
