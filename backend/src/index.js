@@ -18,6 +18,13 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { securityHeaders } from './middleware/security.js';
 import { isRealEmailDeliveryConfigured } from './services/emailService.js';
+// Import models for sequelize.sync() to recognize them
+import './models/User.js';
+import './models/Campaign.js';
+import './models/Contact.js';
+import './models/Email.js';
+import './models/SystemSetting.js';
+import './models/JobQueue.js';
 
 // Load .env only in development (Vercel uses environment variables)
 if (process.env.NODE_ENV !== 'production') {
