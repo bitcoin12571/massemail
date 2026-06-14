@@ -3,6 +3,7 @@ import Email from '../models/Email.js';
 import Campaign from '../models/Campaign.js';
 import Contact from '../models/Contact.js';
 import JobQueue from '../models/JobQueue.js';
+import { fn, col } from 'sequelize';
 
 const jobs = [];
 const stats = { waiting: 0, active: 0, completed: 0, failed: 0 };
@@ -195,7 +196,7 @@ export async function getQueueStats() {
     const dbStats = await JobQueue.findAll({
       attributes: [
         ['status', 'status'],
-        [require('sequelize').fn('COUNT', require('sequelize').col('id')), 'count']
+        [fn('COUNT', col('id')), 'count']
       ],
       group: ['status'],
       raw: true
