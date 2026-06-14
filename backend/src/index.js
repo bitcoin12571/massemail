@@ -13,6 +13,7 @@ import campaignRoutes from './routes/campaigns.js';
 import webhookRoutes from './routes/webhooks.js';
 import settingsRoutes from './routes/settings.js';
 import aiRoutes from './routes/ai.js';
+import queueRoutes from './routes/queue.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { securityHeaders } from './middleware/security.js';
@@ -81,6 +82,7 @@ app.use('/api/contacts', authMiddleware, contactRoutes);
 app.use('/api/campaigns', authMiddleware, campaignRoutes);
 app.use('/api/settings', authMiddleware, settingsRoutes);
 app.use('/api/ai', authMiddleware, aiRoutes);
+app.use('/api/queue', authMiddleware, queueRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

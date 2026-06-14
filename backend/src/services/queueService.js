@@ -2,6 +2,7 @@ import { sendEmail } from './emailService.js';
 import Email from '../models/Email.js';
 import Campaign from '../models/Campaign.js';
 import Contact from '../models/Contact.js';
+import JobQueue from '../models/JobQueue.js';
 
 const jobs = [];
 const stats = { waiting: 0, active: 0, completed: 0, failed: 0 };
@@ -39,6 +40,7 @@ async function processJobs() {
 
     await Promise.allSettled(batch.map(async (job) => {
       let emailRecord;
+      let jobQueueRecord;
       try {
         // Fetch all data in parallel for speed
         const [emailRec, camp, cont] = await Promise.all([
@@ -59,6 +61,22 @@ async function processJobs() {
         }
         if (!contact) {
           throw new Error(`Contact ${job.contactId} not found`);
+        }
+
+        // Create job queue record if it doesn't exist
+        if (!job.queueId) {
+          jobQueueRecord = await JobQueue.create({
+            emailId: job.emailId,
+            campaignId: job.campaignId,
+            contactId: job.contactId,
+            status: 'active'
+          });
+          job.queueId = jobQueueRecord.id;
+        } else {
+          jobQueueRecord = await JobQueue.findByPk(job.queueId);
+          if (jobQueueRecord) {
+            await jobQueueRecord.update({ status: 'active' });
+          }
         }
 
         console.log(`[EMAIL QUEUE] ✅ Processing email ${job.emailId} to ${contact.email}`);
@@ -82,6 +100,12 @@ async function processJobs() {
           sentAt: new Date(),
           sendgridMessageId: result.messageId
         });
+
+        // Update job queue record to completed
+        if (jobQueueRecord) {
+          await jobQueueRecord.update({ status: 'completed' });
+        }
+
         stats.completed += 1;
         console.log(`[EMAIL QUEUE] Stats: ${stats.completed} sent, ${stats.failed} failed, ${stats.waiting} waiting`);
       } catch (error) {
@@ -95,6 +119,15 @@ async function processJobs() {
             failureReason: failReason.substring(0, 500)
           });
         }
+
+        // Update job queue record to failed
+        if (jobQueueRecord) {
+          await jobQueueRecord.update({
+            status: 'failed',
+            failureReason: error.message || String(error)
+          });
+        }
+
         stats.failed += 1;
       } finally {
         stats.active -= 1;
@@ -108,7 +141,16 @@ async function processJobs() {
 export const emailQueue = {
   async add(data) {
     const jobId = nextId++;
-    jobs.push({ id: jobId, ...data });
+
+    // Create job queue record in database
+    const jobQueueRecord = await JobQueue.create({
+      emailId: data.emailId,
+      campaignId: data.campaignId,
+      contactId: data.contactId,
+      status: 'waiting'
+    });
+
+    jobs.push({ id: jobId, queueId: jobQueueRecord.id, ...data });
     stats.waiting += 1;
     console.log(`\n[EMAIL QUEUE] ✅ ✅ ✅ Job ${jobId} added!`);
     console.log(`[EMAIL QUEUE] Queue size: ${jobs.length}, Waiting: ${stats.waiting}\n`);
@@ -139,7 +181,52 @@ export async function initializeQueue() {
 }
 
 export async function getQueueStats() {
-  return { ...stats, total: stats.waiting + stats.active + stats.completed + stats.failed };
+  try {
+    // Get real-time in-memory stats
+    const inMemoryStats = {
+      waiting: stats.waiting,
+      active: stats.active,
+      completed: stats.completed,
+      failed: stats.failed,
+      total: stats.waiting + stats.active + stats.completed + stats.failed
+    };
+
+    // Get persisted stats from database
+    const dbStats = await JobQueue.findAll({
+      attributes: [
+        ['status', 'status'],
+        [require('sequelize').fn('COUNT', require('sequelize').col('id')), 'count']
+      ],
+      group: ['status'],
+      raw: true
+    });
+
+    // Merge stats
+    const persistedStats = {
+      waiting: 0,
+      active: 0,
+      completed: 0,
+      failed: 0
+    };
+
+    dbStats.forEach(stat => {
+      persistedStats[stat.status] = parseInt(stat.count, 10);
+    });
+
+    // Return combined stats (in-memory + persisted)
+    return {
+      inMemory: inMemoryStats,
+      persisted: persistedStats,
+      total: inMemoryStats.total + Object.values(persistedStats).reduce((a, b) => a + b, 0)
+    };
+  } catch (error) {
+    console.error('Error getting queue stats:', error);
+    return {
+      ...stats,
+      total: stats.waiting + stats.active + stats.completed + stats.failed,
+      error: 'Failed to fetch persisted stats'
+    };
+  }
 }
 
 export async function clearFailedJobs() {
