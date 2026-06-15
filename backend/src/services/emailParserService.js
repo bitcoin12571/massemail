@@ -287,3 +287,22 @@ export async function parseJSON(jsonContent) {
     throw new Error(`JSON parsing failed: ${error.message}`);
   }
 }
+
+// Auto-convert ParsedEmail to Contact for easier access
+export async function syncParsedEmailsToContacts(userId) {
+  try {
+    const Contact = (await import('../models/Contact.js')).default;
+    const parsed = await ParsedEmail.findAll({ where: { isValid: true }, raw: true });
+
+    for (const p of parsed) {
+      await Contact.findOrCreate({
+        where: { email: p.email },
+        defaults: { email: p.email, name: p.name || '', createdBy: userId, status: 'active', verified: false }
+      });
+    }
+    return parsed.length;
+  } catch (err) {
+    console.error('Sync failed:', err.message);
+    return 0;
+  }
+}

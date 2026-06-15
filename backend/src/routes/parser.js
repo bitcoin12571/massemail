@@ -1,8 +1,6 @@
 import express from 'express';
-import { parseCSV, parsePlainText, parseJSON, saveParsedEmails, getEmailsByRegion, getAllRegions, getRegionStats, validateAndFixEmails, deleteByRegion } from '../services/emailParserService.js';
+import { parseCSV, parsePlainText, parseJSON, saveParsedEmails, getEmailsByRegion, getAllRegions, getRegionStats, validateAndFixEmails, deleteByRegion, syncParsedEmailsToContacts } from '../services/emailParserService.js';
 import logger from '../services/logger.js';
-import ParsedEmail from '../models/ParsedEmail.js';
-import Contact from '../models/Contact.js';
 
 const router = express.Router();
 
@@ -88,6 +86,17 @@ router.post('/upload-csv', async (req, res) => {
     }
 
     logger.info('PARSER', `Imported ${saved.length} emails (format: ${detectedFormat}, errors: ${errors.length})`);
+
+    // Auto-sync to Contact table so they appear in "Trimite email acum"
+    try {
+      const userId = req.user?.id;
+      if (userId) {
+        await syncParsedEmailsToContacts(userId);
+        logger.info('PARSER', `Synced emails to contacts for user ${userId}`);
+      }
+    } catch (syncErr) {
+      logger.warn('PARSER', `Sync to contacts failed: ${syncErr.message}`);
+    }
 
     // For large responses, only return summary (not individual emails)
     const shouldReturnDetails = saved.length <= 100;
