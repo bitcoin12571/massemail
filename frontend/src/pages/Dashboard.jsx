@@ -41,8 +41,8 @@ export default function Dashboard({ user, onLogout }) {
     { label: t('sendNow'), icon: MailPlus },
     { label: t('sendHistory'), icon: History },
     { label: t('deliveryStatus'), icon: BarChart3 },
-    { label: 'Email Parser', icon: Upload },
-    { label: 'Bulk Sender', icon: Send }
+    { label: t('emailParser'), icon: Upload },
+    { label: t('bulkSender'), icon: Send }
   ];
 
   return (
