@@ -59,7 +59,7 @@ export default function EmailParser() {
 
   const handleParseCsv = async () => {
     if (!csvContent.trim()) {
-      setNotice({ type: 'error', text: 'Please upload or paste CSV content' });
+      setNotice({ type: 'error', text: t('csvUploadError') });
       return;
     }
 
@@ -68,7 +68,7 @@ export default function EmailParser() {
       const { data } = await API.post('/parser/upload-csv', { csvContent });
 
       setResults(data);
-      setNotice({ type: 'success', text: `${data.validEmails} emails imported successfully!` });
+      setNotice({ type: 'success', text: t('csvImportSuccess', { count: data.validEmails }) });
 
       // Refresh regions
       setTimeout(fetchRegions, 500);
@@ -83,7 +83,7 @@ export default function EmailParser() {
     setLoading(true);
     try {
       const { data } = await API.post('/parser/validate');
-      setNotice({ type: 'success', text: `Validation complete: ${data.validEmails} valid, ${data.fixedCount} fixed` });
+      setNotice({ type: 'success', text: t('validationSuccess', { validEmails: data.validEmails, fixedCount: data.fixedCount }) });
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, 'Validation failed') });
     } finally {
@@ -95,18 +95,18 @@ export default function EmailParser() {
     <>
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">EMAIL MASIV</Typography>
-          <Typography variant="h3">Parser & Segmentare Email</Typography>
-          <Typography color="text.secondary">Importă și organizează emailuri pe regiuni</Typography>
+          <Typography className="eyebrow">{t('emailParserEyebrow')}</Typography>
+          <Typography variant="h3">{t('emailParserTitle')}</Typography>
+          <Typography color="text.secondary">{t('emailParserSubtitle')}</Typography>
         </Box>
       </Box>
 
       <Stack spacing={3}>
         {/* CSV Upload Section */}
         <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>📤 Upload Fișier CSV</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('uploadCsvTitle')}</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Format: email, nume, regiunea (one per line)
+            {t('uploadCsvHelp')}
           </Typography>
 
           <Stack spacing={2}>
@@ -120,7 +120,7 @@ export default function EmailParser() {
             <TextField
               multiline
               rows={6}
-              placeholder="Sau paste conținut CSV aici..."
+              placeholder={t('csvPlaceholder')}
               value={csvContent}
               onChange={(e) => setCsvContent(e.target.value)}
               variant="outlined"
@@ -134,7 +134,7 @@ export default function EmailParser() {
                 onClick={handleParseCsv}
                 disabled={loading || !csvContent.trim()}
               >
-                {loading ? 'Se procesează...' : 'Parse & Import'}
+                {loading ? t('processingCsv') : t('parseImport')}
               </Button>
 
               <Button
@@ -142,7 +142,7 @@ export default function EmailParser() {
                 onClick={handleValidateEmails}
                 disabled={loading || regionStats.length === 0}
               >
-                Validează Emailuri
+                {t('validateEmails')}
               </Button>
             </Stack>
           </Stack>
@@ -155,13 +155,13 @@ export default function EmailParser() {
               <Stack direction="row" spacing={3} alignItems="center">
                 <CheckCircle2 size={32} color="#10b981" />
                 <Box>
-                  <Typography variant="h6">✅ Import Reușit!</Typography>
+                  <Typography variant="h6">{t('importSuccessTitle')}</Typography>
                   <Typography variant="body2">
-                    {results.validEmails} emailuri valide importate din {results.totalProcessed} rânduri
+                    {t('importSuccessText', { validEmails: results.validEmails, totalProcessed: results.totalProcessed })}
                   </Typography>
                   {results.errors.length > 0 && (
                     <Typography variant="caption" color="error">
-                      {results.errors.length} erori găsite
+                      {t('importErrors', { errorCount: results.errors.length })}
                     </Typography>
                   )}
                 </Box>
@@ -172,16 +172,16 @@ export default function EmailParser() {
 
         {/* Region Statistics */}
         <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>📊 Statistici Regiuni</Typography>
+          <Typography variant="h6" sx={{ mb: 2 }}>{t('regionStatsTitle')}</Typography>
 
           {regionStats.length > 0 ? (
             <Box sx={{ overflowX: 'auto' }}>
               <Table>
                 <TableHead>
                   <TableRow sx={{ backgroundColor: '#f3f4f6' }}>
-                    <TableCell><MapPin size={18} /> Regiunea</TableCell>
-                    <TableCell align="right"><Mail size={18} /> Nr. Emailuri</TableCell>
-                    <TableCell align="right">Procent</TableCell>
+                    <TableCell><MapPin size={18} /> {t('regionHeader')}</TableCell>
+                    <TableCell align="right"><Mail size={18} /> {t('countHeader')}</TableCell>
+                    <TableCell align="right">{t('percentHeader')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -193,7 +193,7 @@ export default function EmailParser() {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <MapPin size={16} />
-                            {stat.region || 'necunoscut'}
+                            {stat.region || t('unknownRegion')}
                           </Box>
                         </TableCell>
                         <TableCell align="right">{stat.count}</TableCell>
@@ -210,7 +210,7 @@ export default function EmailParser() {
               </Table>
             </Box>
           ) : (
-            <Typography color="text.secondary">Nicio dată încă. Upload un CSV pentru a începe.</Typography>
+            <Typography color="text.secondary">{t('regionEmpty')}</Typography>
           )}
         </Paper>
       </Stack>

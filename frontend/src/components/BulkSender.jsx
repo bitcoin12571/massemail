@@ -70,7 +70,7 @@ export default function BulkSender() {
 
   const handleCreateCampaign = async () => {
     if (!formData.name || !formData.subject || !formData.htmlTemplate) {
-      setNotice({ type: 'error', text: 'All fields are required' });
+      setNotice({ type: 'error', text: t('allFieldsRequired') });
       return;
     }
 
@@ -80,9 +80,9 @@ export default function BulkSender() {
       setCampaigns([...campaigns, data.campaign]);
       setFormData({ name: '', subject: '', htmlTemplate: '', region: '' });
       setOpenDialog(false);
-      setNotice({ type: 'success', text: 'Campaign created successfully!' });
+      setNotice({ type: 'success', text: t('campaignCreatedSuccess') });
     } catch (error) {
-      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Failed to create campaign') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('campaignCreatedError')) });
     } finally {
       setLoading(false);
     }
@@ -92,25 +92,25 @@ export default function BulkSender() {
     setLoading(true);
     try {
       const { data } = await API.post(`/bulk-sender/campaign/${campaignId}/send`);
-      setNotice({ type: 'success', text: `Campaign sent to ${data.sentCount} recipients!` });
+      setNotice({ type: 'success', text: t('campaignSentSuccess', { count: data.sentCount }) });
       fetchCampaigns();
     } catch (error) {
-      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Failed to send campaign') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('campaignSendError')) });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteCampaign = async (campaignId) => {
-    if (!window.confirm('Are you sure you want to delete this campaign?')) return;
+    if (!window.confirm(t('confirmDelete'))) return;
 
     setLoading(true);
     try {
       await API.delete(`/bulk-sender/campaign/${campaignId}`);
       setCampaigns(campaigns.filter(c => c.id !== campaignId));
-      setNotice({ type: 'success', text: 'Campaign deleted' });
+      setNotice({ type: 'success', text: t('campaignDeletedSuccess') });
     } catch (error) {
-      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Failed to delete campaign') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('campaignDeleteError')) });
     } finally {
       setLoading(false);
     }
@@ -121,7 +121,7 @@ export default function BulkSender() {
       const { data } = await API.get(`/bulk-sender/campaign/${campaignId}/stats`);
       setSelectedCampaign(data);
     } catch (error) {
-      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Failed to load stats') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('statsLoadError')) });
     }
   };
 
@@ -129,16 +129,16 @@ export default function BulkSender() {
     <>
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">BULK EMAIL</Typography>
-          <Typography variant="h3">Campaign Manager</Typography>
-          <Typography color="text.secondary">Create and send bulk email campaigns</Typography>
+          <Typography className="eyebrow">{t('bulkSenderEyebrow')}</Typography>
+          <Typography variant="h3">{t('bulkSenderTitle')}</Typography>
+          <Typography color="text.secondary">{t('bulkSenderSubtitle')}</Typography>
         </Box>
         <Button
           variant="contained"
           startIcon={<Send size={18} />}
           onClick={() => setOpenDialog(true)}
         >
-          New Campaign
+          {t('newCampaignBtn')}
         </Button>
       </Box>
 
@@ -148,13 +148,13 @@ export default function BulkSender() {
           <Table>
             <TableHead>
               <TableRow sx={{ backgroundColor: '#f3f4f6' }}>
-                <TableCell>Campaign Name</TableCell>
-                <TableCell>Region</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Recipients</TableCell>
-                <TableCell align="right">Sent</TableCell>
-                <TableCell align="right">Failed</TableCell>
-                <TableCell align="center">Actions</TableCell>
+                <TableCell>{t('campaignNameHeader')}</TableCell>
+                <TableCell>{t('regionHeader2')}</TableCell>
+                <TableCell>{t('statusHeader')}</TableCell>
+                <TableCell align="right">{t('recipientsHeader')}</TableCell>
+                <TableCell align="right">{t('sentHeader')}</TableCell>
+                <TableCell align="right">{t('failedHeader')}</TableCell>
+                <TableCell align="center">{t('actionsHeader')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -184,7 +184,7 @@ export default function BulkSender() {
                         startIcon={<BarChart3 size={16} />}
                         onClick={() => handleViewStats(campaign.id)}
                       >
-                        Stats
+                        {t('statsBtn')}
                       </Button>
                       {campaign.status === 'draft' && (
                         <Button
@@ -195,7 +195,7 @@ export default function BulkSender() {
                           onClick={() => handleSendCampaign(campaign.id)}
                           disabled={loading}
                         >
-                          Send
+                          {t('sendBtn')}
                         </Button>
                       )}
                       <Button
@@ -206,7 +206,7 @@ export default function BulkSender() {
                         onClick={() => handleDeleteCampaign(campaign.id)}
                         disabled={loading}
                       >
-                        Delete
+                        {t('deleteBtn')}
                       </Button>
                     </Stack>
                   </TableCell>
@@ -216,60 +216,60 @@ export default function BulkSender() {
           </Table>
         ) : (
           <Box sx={{ p: 3, textAlign: 'center' }}>
-            <Typography color="text.secondary">No campaigns yet. Click "New Campaign" to get started.</Typography>
+            <Typography color="text.secondary">{t('noCampaigns')}</Typography>
           </Box>
         )}
       </Paper>
 
       {/* Create Campaign Dialog */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Crează Campanie Nouă</DialogTitle>
+        <DialogTitle>{t('createCampaignTitle')}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={2}>
             <TextField
-              label="Nume Campanie"
+              label={t('campaignNameLabel')}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               fullWidth
             />
             <TextField
-              label="Subiect Email"
+              label={t('campaignSubjectLabel')}
               value={formData.subject}
               onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
               fullWidth
             />
             <FormControl fullWidth>
-              <InputLabel>Regiunea Țintă (Opțional)</InputLabel>
+              <InputLabel>{t('targetRegionLabel')}</InputLabel>
               <Select
                 value={formData.region}
                 onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                label="Regiunea Țintă"
+                label={t('targetRegionLabel')}
               >
-                <MenuItem value="">Toate Regiunile</MenuItem>
+                <MenuItem value="">{t('allRegions')}</MenuItem>
                 {regions.map((region) => (
                   <MenuItem key={region} value={region}>{region}</MenuItem>
                 ))}
               </Select>
             </FormControl>
             <TextField
-              label="Template HTML Email"
+              label={t('htmlTemplateLabel')}
               value={formData.htmlTemplate}
               onChange={(e) => setFormData({ ...formData, htmlTemplate: e.target.value })}
               multiline
               rows={6}
               fullWidth
-              helperText="Folosește {{name}}, {{email}}, {{region}} pentru personalizare"
+              helperText={t('htmlTemplateHelper')}
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>Anulează</Button>
+          <Button onClick={() => setOpenDialog(false)}>{t('cancelBtn')}</Button>
           <Button
             variant="contained"
             onClick={handleCreateCampaign}
             disabled={loading}
           >
-            Crează Campanie
+            {t('createBtn')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -277,25 +277,25 @@ export default function BulkSender() {
       {/* Campaign Stats Modal */}
       {selectedCampaign && (
         <Dialog open={!!selectedCampaign} onClose={() => setSelectedCampaign(null)} maxWidth="sm" fullWidth>
-          <DialogTitle>Campaign Statistics</DialogTitle>
+          <DialogTitle>{t('campaignStatsTitle')}</DialogTitle>
           <DialogContent sx={{ pt: 2 }}>
             <Stack spacing={3}>
               <Box>
-                <Typography variant="subtitle2">Campaign: {selectedCampaign.campaign.name}</Typography>
-                <Typography variant="caption" color="text.secondary">Created: {new Date(selectedCampaign.campaign.createdAt).toLocaleDateString()}</Typography>
+                <Typography variant="subtitle2">{t('campaignLabel', { name: selectedCampaign.campaign.name })}</Typography>
+                <Typography variant="caption" color="text.secondary">{t('createdLabel', { date: new Date(selectedCampaign.campaign.createdAt).toLocaleDateString() })}</Typography>
               </Box>
 
               <Stack spacing={1}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography>Total Recipients:</Typography>
+                  <Typography>{t('totalRecipientsLabel')}</Typography>
                   <Typography variant="subtitle2">{selectedCampaign.campaign.totalRecipients}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography>Sent:</Typography>
+                  <Typography>{t('sentLabel')}</Typography>
                   <Typography variant="subtitle2">{selectedCampaign.campaign.sentCount}</Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography>Failed:</Typography>
+                  <Typography>{t('failedLabel')}</Typography>
                   <Typography variant="subtitle2">{selectedCampaign.campaign.failedCount}</Typography>
                 </Box>
               </Stack>
@@ -303,7 +303,7 @@ export default function BulkSender() {
               <Stack spacing={2}>
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="caption">Open Rate</Typography>
+                    <Typography variant="caption">{t('openRateLabel')}</Typography>
                     <Typography variant="caption">{selectedCampaign.openRate}%</Typography>
                   </Box>
                   <LinearProgress variant="determinate" value={parseFloat(selectedCampaign.openRate)} />
@@ -311,7 +311,7 @@ export default function BulkSender() {
 
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="caption">Click Rate</Typography>
+                    <Typography variant="caption">{t('clickRateLabel')}</Typography>
                     <Typography variant="caption">{selectedCampaign.clickRate}%</Typography>
                   </Box>
                   <LinearProgress variant="determinate" value={parseFloat(selectedCampaign.clickRate)} />
@@ -319,7 +319,7 @@ export default function BulkSender() {
 
                 <Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="caption">Bounce Rate</Typography>
+                    <Typography variant="caption">{t('bounceRateLabel')}</Typography>
                     <Typography variant="caption">{selectedCampaign.bounceRate}%</Typography>
                   </Box>
                   <LinearProgress variant="determinate" value={parseFloat(selectedCampaign.bounceRate)} color="error" />
@@ -328,7 +328,7 @@ export default function BulkSender() {
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setSelectedCampaign(null)}>Close</Button>
+            <Button onClick={() => setSelectedCampaign(null)}>{t('closeBtn')}</Button>
           </DialogActions>
         </Dialog>
       )}
