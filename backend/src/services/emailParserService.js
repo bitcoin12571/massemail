@@ -162,3 +162,110 @@ export async function deleteByRegion(region) {
     throw new Error(`Failed to delete region: ${error.message}`);
   }
 }
+
+// Parse Plain Text format (one email per line)
+export async function parsePlainText(textContent) {
+  try {
+    const lines = textContent.split('\n').filter(line => line.trim());
+    const results = [];
+    const errors = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const email = lines[i].trim().toLowerCase();
+      if (!email) continue;
+
+      // Validate email
+      if (!isValidEmail(email)) {
+        errors.push({ line: i + 1, email, reason: 'Invalid email format' });
+        continue;
+      }
+
+      // Auto-detect region
+      const region = guessRegion(email);
+
+      results.push({
+        email,
+        name: '',
+        region,
+        source: 'plaintext_upload',
+        isValid: true
+      });
+    }
+
+    return { results, errors, totalProcessed: lines.length };
+  } catch (error) {
+    throw new Error(`Plain text parsing failed: ${error.message}`);
+  }
+}
+
+// Parse JSON format: { "emails": [{ "email": "...", "name": "...", "region": "..." }] }
+export async function parseJSON(jsonContent) {
+  try {
+    let data;
+
+    // Parse JSON string
+    try {
+      data = JSON.parse(jsonContent);
+    } catch (parseErr) {
+      throw new Error(`Invalid JSON format: ${parseErr.message}`);
+    }
+
+    // Support both { emails: [...] } and just [...]
+    const emailsList = Array.isArray(data) ? data : data.emails || data.data || [];
+
+    if (!Array.isArray(emailsList)) {
+      throw new Error('JSON must contain an array of emails or { emails: [...] }');
+    }
+
+    const results = [];
+    const errors = [];
+
+    for (let i = 0; i < emailsList.length; i++) {
+      const item = emailsList[i];
+
+      // Handle both object and string format
+      let email = '';
+      let name = '';
+      let region = '';
+
+      if (typeof item === 'string') {
+        email = item.toLowerCase().trim();
+      } else if (typeof item === 'object' && item !== null) {
+        email = (item.email || '').toLowerCase().trim();
+        name = item.name || '';
+        region = item.region || '';
+      } else {
+        errors.push({ line: i + 1, reason: 'Invalid format - must be string or object' });
+        continue;
+      }
+
+      if (!email) {
+        errors.push({ line: i + 1, reason: 'Email is required' });
+        continue;
+      }
+
+      // Validate email
+      if (!isValidEmail(email)) {
+        errors.push({ line: i + 1, email, reason: 'Invalid email format' });
+        continue;
+      }
+
+      // Auto-detect region if not provided
+      if (!region) {
+        region = guessRegion(email, name);
+      }
+
+      results.push({
+        email,
+        name,
+        region: region.toLowerCase(),
+        source: 'json_upload',
+        isValid: true
+      });
+    }
+
+    return { results, errors, totalProcessed: emailsList.length };
+  } catch (error) {
+    throw new Error(`JSON parsing failed: ${error.message}`);
+  }
+}
