@@ -20,6 +20,7 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { securityHeaders } from './middleware/security.js';
 import { isRealEmailDeliveryConfigured } from './services/emailService.js';
+import logger from './services/logger.js';
 // Import models for sequelize.sync() to recognize them
 import './models/User.js';
 import './models/Campaign.js';
@@ -44,16 +45,17 @@ export function initializeApp() {
     initializationPromise = (async () => {
       await initializeQueue();
       await sequelize.authenticate();
-      console.log('Database connected');
+      logger.info('DB', 'Database connected');
 
       await sequelize.sync({ force: false, alter: false });
-      console.log('Models synced');
+      logger.info('DB', 'Models synced');
 
       await initializeEmailService();
 
       // Start the email scheduler
       startScheduler();
     })().catch((error) => {
+      logger.error('INIT', 'Startup error', error);
       initializationPromise = undefined;
       throw error;
     });
@@ -144,11 +146,11 @@ if (isDirectRun) {
   try {
     await initializeApp();
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-      console.log('CORS enabled for all origins');
+      logger.info('SERVER', `running on http://localhost:${PORT}`);
+      logger.info('CORS', 'enabled for all origins');
     });
   } catch (error) {
-    console.error('Startup error:', error);
+    logger.error('STARTUP', 'Fatal error', error);
     process.exit(1);
   }
 }

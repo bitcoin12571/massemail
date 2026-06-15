@@ -1,3 +1,4 @@
+import logger from '../services/logger.js';
 import express from 'express';
 import { createBulkCampaign, sendBulkCampaign, getCampaignStats, getAllCampaigns, deleteCampaign } from '../services/bulkSenderService.js';
 

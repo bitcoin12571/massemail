@@ -2,14 +2,23 @@ import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
 import SystemSetting from '../models/SystemSetting.js';
 
+// Validate required environment variables for production
+function validateEmailConfig() {
+  if (process.env.NODE_ENV === 'production' && !process.env.EMAIL_PROVIDER) {
+    throw new Error('EMAIL_PROVIDER environment variable is required in production');
+  }
+}
+
+validateEmailConfig();
+
 const defaults = {
   provider: process.env.EMAIL_PROVIDER || 'preview',
   senderName: process.env.SENDER_NAME || 'Company Mail Center',
-  senderEmail: process.env.EMAIL_FROM || 'info29730@gmail.com',
+  senderEmail: process.env.EMAIL_FROM || null, // No default - must be configured
   smtpHost: process.env.SMTP_HOST || '',
   smtpPort: 587,
   smtpSecure: false,
-  smtpUser: process.env.SMTP_USER || 'info29730@gmail.com',
+  smtpUser: process.env.SMTP_USER || null, // No default - must be configured
   smtpPassword: process.env.SMTP_PASS || '',
   sendgridApiKey: process.env.SENDGRID_API_KEY || '',
   resendApiKey: process.env.RESEND_API_KEY || ''

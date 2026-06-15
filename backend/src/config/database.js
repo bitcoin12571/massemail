@@ -1,3 +1,4 @@
+import logger from '../services/logger.js';
 import { Sequelize } from 'sequelize';
 import sqlite3 from 'sqlite3';
 import dotenv from 'dotenv';

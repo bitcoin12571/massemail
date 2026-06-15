@@ -9,9 +9,19 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 
 function getJwtSecret() {
-  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
-  if (!process.env.VERCEL) return 'mailora-local-development-secret';
-  return null;
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET environment variable is required in production');
+    }
+    // Development only
+    if (process.env.VERCEL) {
+      throw new Error('JWT_SECRET environment variable is required on Vercel');
+    }
+    // Local development fallback
+    return 'dev-secret-change-in-production';
+  }
+  return secret;
 }
 
 function secureEqual(left = '', right = '') {

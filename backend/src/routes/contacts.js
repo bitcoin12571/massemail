@@ -1,3 +1,4 @@
+import logger from '../services/logger.js';
 import express from 'express';
 import { Op } from 'sequelize';
 import Contact from '../models/Contact.js';

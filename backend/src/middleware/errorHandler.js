@@ -1,3 +1,4 @@
+import logger from '../services/logger.js';
 export const errorHandler = (err, req, res, next) => {
   console.error(`[${req.requestId || 'no-request-id'}] Error:`, err);
 

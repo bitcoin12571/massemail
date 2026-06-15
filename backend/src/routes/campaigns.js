@@ -12,6 +12,7 @@ import {
 import { validateRequest } from '../middleware/validation.js';
 import { campaignSchema, campaignSendSchema, previewEmailSchema } from '../schemas/email.schema.js';
 import { emailSendLimiter, campaignSendLimiter } from '../middleware/rateLimiter.js';
+import logger from '../services/logger.js';
 
 const router = express.Router();
 
@@ -99,7 +100,7 @@ router.post('/', validateRequest(campaignSchema), async (req, res) => {
 
 router.post('/:id/send', emailSendLimiter, campaignSendLimiter, validateRequest(campaignSendSchema), async (req, res) => {
   try {
-    console.log(`\n[CAMPAIGN SEND] 📧 Sending campaign ${req.params.id}`);
+    logger.info('CAMPAIGN', `Sending campaign ${req.params.id}`);
     const campaign = await Campaign.findOne({ where: { id: req.params.id, createdBy: req.user.id } });
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
 

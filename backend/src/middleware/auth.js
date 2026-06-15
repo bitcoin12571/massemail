@@ -16,10 +16,19 @@ export const authMiddleware = (req, res, next) => {
   }
 
   try {
-    const secret = process.env.JWT_SECRET
-      || (!process.env.VERCEL ? 'mailora-local-development-secret' : null);
+    // In production, JWT_SECRET is REQUIRED
+    const secret = process.env.JWT_SECRET;
     if (!secret) {
-      return res.status(503).json({ error: 'Authentication is not configured' });
+      if (process.env.NODE_ENV === 'production') {
+        console.error('SECURITY: JWT_SECRET not configured in production');
+        return res.status(503).json({ error: 'Authentication is not configured' });
+      }
+      // Development only - allow with warning
+      if (process.env.VERCEL) {
+        return res.status(503).json({ error: 'Authentication is not configured' });
+      }
+      // Local development fallback
+      return jwt.verify(token, 'dev-secret-change-in-production');
     }
 
     const decoded = jwt.verify(token, secret);
