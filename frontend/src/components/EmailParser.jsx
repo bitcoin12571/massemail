@@ -70,16 +70,8 @@ export default function EmailParser() {
       setResults(data);
       setNotice({ type: 'success', text: t('csvImportSuccess', { count: data.validEmails }) });
 
-      // Auto-sync to Contacts so they appear in "Trimite email acum"
-      setTimeout(async () => {
-        try {
-          await API.post('/parser/sync-to-contacts');
-          console.log('✅ Emails synced to contacts');
-        } catch (syncErr) {
-          console.warn('Sync to contacts failed:', syncErr);
-        }
-        fetchRegions();
-      }, 500);
+      // Refresh regions
+      setTimeout(fetchRegions, 500);
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, 'Failed to parse CSV') });
     } finally {
