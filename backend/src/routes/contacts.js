@@ -104,7 +104,25 @@ router.post('/', validateRequest(contactSchema), async (req, res) => {
 router.post('/import', contactImportLimiter, async (req, res) => {
   try {
     const { csvData } = req.body;
-    const parsed = parseCSV(csvData);
+
+    // Validate CSV data size to prevent memory exhaustion
+    if (!csvData || typeof csvData !== 'string') {
+      return res.status(400).json({ error: 'CSV data must be a string' });
+    }
+    if (csvData.length > 5 * 1024 * 1024) { // 5MB limit
+      return res.status(413).json({ error: 'CSV file is too large (max 5MB)' });
+    }
+
+    let parsed;
+    try {
+      parsed = parseCSV(csvData);
+    } catch (parseError) {
+      // Catch CSV parsing errors specifically
+      return res.status(400).json({
+        error: `CSV parsing error: ${parseError.message}`,
+        help: 'Make sure CSV has an email column and is properly formatted'
+      });
+    }
 
     // Validate emails before bulk create
     const invalid = parsed.filter(c => !isValidEmail(c.email));
@@ -125,7 +143,8 @@ router.post('/import', contactImportLimiter, async (req, res) => {
 
     res.json({ imported: created.length, total: contacts.length });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    logger.error('CONTACT_IMPORT', 'Unexpected error', error);
+    res.status(500).json({ error: 'Failed to import contacts. Please try again.' });
   }
 });
 

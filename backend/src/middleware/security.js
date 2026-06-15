@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 
 export function securityHeaders(req, res, next) {
   const requestId = req.headers['x-request-id'] || randomUUID();
@@ -24,7 +24,24 @@ export function requireWebhookSecret(req, res, next) {
   }
 
   const provided = req.headers['x-webhook-secret'];
-  if (provided !== expected) {
+  if (!provided) {
+    return res.status(401).json({ error: 'Webhook secret required' });
+  }
+
+  // SECURITY: Use timing-safe comparison to prevent timing attacks
+  try {
+    const expectedBuffer = Buffer.from(expected);
+    const providedBuffer = Buffer.from(provided);
+
+    // Check length first to prevent info leakage
+    if (expectedBuffer.length !== providedBuffer.length) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+
+    if (!timingSafeEqual(expectedBuffer, providedBuffer)) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+  } catch (error) {
     return res.status(401).json({ error: 'Invalid webhook signature' });
   }
 

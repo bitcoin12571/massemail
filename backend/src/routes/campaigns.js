@@ -147,15 +147,19 @@ router.post('/:id/preview', validateRequest(previewEmailSchema), async (req, res
     if (!contact) return res.status(404).json({ error: 'Contact not found' });
 
     // Personalize the email content with contact data
+    // SECURITY: Escape regex special characters to prevent ReDoS attacks
+    const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
     const personalize = (template, contact) => {
       let content = template;
       content = content.replace(/{{firstName}}/g, contact.firstName || '');
       content = content.replace(/{{lastName}}/g, contact.lastName || '');
       content = content.replace(/{{email}}/g, contact.email || '');
-      // Support any custom fields in the contact
+      // Support any custom fields in the contact (with escaped regex to prevent ReDoS)
       if (contact.customData) {
         Object.entries(contact.customData).forEach(([key, value]) => {
-          content = content.replace(new RegExp(`{{${key}}}`, 'g'), value || '');
+          const escapedKey = escapeRegex(key);
+          content = content.replace(new RegExp(`{{${escapedKey}}}`, 'g'), value || '');
         });
       }
       return content;
