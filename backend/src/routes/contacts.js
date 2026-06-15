@@ -4,7 +4,6 @@ import { Op } from 'sequelize';
 import Contact from '../models/Contact.js';
 import Campaign from '../models/Campaign.js';
 import Email from '../models/Email.js';
-import ParsedEmail from '../models/ParsedEmail.js';
 import { emailQueue } from '../services/queueService.js';
 import { isRealEmailDeliveryConfigured } from '../services/emailService.js';
 import { parseCSV } from '../utils/csvParser.js';
@@ -33,9 +32,8 @@ function isValidEmail(email) {
 // Get all contacts
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 500, search } = req.query;
+    const { page = 1, limit = 20, search } = req.query;
     const offset = (page - 1) * limit;
-    const searchLimit = parseInt(limit);
 
     const where = { createdBy: req.user.id };
     if (search) {
@@ -47,56 +45,18 @@ router.get('/', async (req, res) => {
 
     const { count, rows } = await Contact.findAndCountAll({
       where,
-      limit: searchLimit,
+      limit: parseInt(limit),
       offset,
       order: [['createdAt', 'DESC']]
     });
 
-    // Also get ParsedEmails from Email Parser
-    let parsedEmails = [];
-    try {
-      let parsedWhere = { isValid: true };
-      if (search) {
-        parsedWhere[Op.or] = [
-          { email: { [Op.like]: `%${search}%` } },
-          { name: { [Op.like]: `%${search}%` } }
-        ];
-      }
-      parsedEmails = await ParsedEmail.findAll({
-        where: parsedWhere,
-        limit: searchLimit,
-        raw: true
-      });
-    } catch (err) {
-      logger.warn('CONTACTS', `ParsedEmail lookup failed: ${err.message}`);
-    }
-
-    // Convert ParsedEmail to Contact format
-    const converted = parsedEmails.map(pe => ({
-      id: `parsed_${pe.id}`,
-      email: pe.email,
-      name: pe.name || '',
-      region: pe.region,
-      status: 'active',
-      verified: false,
-      createdAt: pe.createdAt,
-      source: 'email_parser'
-    }));
-
-    // Merge and dedupe by email
-    const allContacts = [...rows, ...converted];
-    const deduped = Array.from(
-      new Map(allContacts.map(c => [c.email, c])).values()
-    );
-
     res.json({
-      contacts: deduped.slice(0, searchLimit),
-      total: deduped.length,
+      contacts: rows,
+      total: count,
       page: parseInt(page),
-      pages: Math.ceil(deduped.length / searchLimit)
+      pages: Math.ceil(count / limit)
     });
   } catch (error) {
-    logger.error('CONTACTS_GET', 'Get contacts error', error);
     res.status(500).json({ error: error.message });
   }
 });
