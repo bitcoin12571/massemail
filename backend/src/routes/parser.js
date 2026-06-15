@@ -1,6 +1,8 @@
 import express from 'express';
 import { parseCSV, parsePlainText, parseJSON, saveParsedEmails, getEmailsByRegion, getAllRegions, getRegionStats, validateAndFixEmails, deleteByRegion } from '../services/emailParserService.js';
 import logger from '../services/logger.js';
+import ParsedEmail from '../models/ParsedEmail.js';
+import Contact from '../models/Contact.js';
 
 const router = express.Router();
 
@@ -176,6 +178,58 @@ router.delete('/region/:region', async (req, res) => {
     res.json({ success: true, deleted, region });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Sync ParsedEmail to Contact (so they appear in "Trimite email acum")
+router.post('/sync-to-contacts', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Get all ParsedEmails that are valid
+    const parsedEmails = await ParsedEmail.findAll({
+      where: { isValid: true }
+    });
+
+    if (parsedEmails.length === 0) {
+      return res.json({ success: true, synced: 0, message: 'No emails to sync' });
+    }
+
+    // Sync to Contact model (findOrCreate pattern)
+    let synced = 0;
+    for (const parsed of parsedEmails) {
+      try {
+        const [contact, created] = await Contact.findOrCreate({
+          where: { email: parsed.email },
+          defaults: {
+            email: parsed.email,
+            name: parsed.name || '',
+            createdBy: userId,
+            status: 'active',
+            verified: false
+          }
+        });
+        if (created) {
+          synced++;
+          logger.info('PARSER_SYNC', `Synced email: ${parsed.email}`);
+        }
+      } catch (err) {
+        logger.warn('PARSER_SYNC', `Failed to sync ${parsed.email}: ${err.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      synced,
+      total: parsedEmails.length,
+      message: `${synced} new emails synced to contacts`
+    });
+  } catch (error) {
+    logger.error('PARSER_SYNC', 'Sync error', error);
+    res.status(500).json({ error: 'Failed to sync emails' });
   }
 });
 
