@@ -44,6 +44,10 @@ export default function CampaignDashboard({ onOpenDatabase }) {
   const [overview, setOverview] = useState({ contacts: 0, sent: 0, openRate: 0, clickRate: 0 });
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
+  const [sendDialog, setSendDialog] = useState(false);
+  const [campaignToSend, setCampaignToSend] = useState(null);
+  const [sendContacts, setSendContacts] = useState([]);
+  const [selectedContactIds, setSelectedContactIds] = useState([]);
   const [notice, setNotice] = useState(null);
   const [period, setPeriod] = useState('30');
   const [periodAnchor, setPeriodAnchor] = useState(null);
@@ -93,11 +97,28 @@ export default function CampaignDashboard({ onOpenDatabase }) {
     }
   };
 
-  const sendCampaign = async (campaign) => {
+  const openSendDialog = async (campaign) => {
+    try {
+      const { data } = await API.get('/contacts', { params: { limit: 500 } });
+      setSendContacts(data.contacts || []);
+      setSelectedContactIds((data.contacts || []).map(c => c.id));
+      setCampaignToSend(campaign);
+      setSendDialog(true);
+    } catch (error) {
+      setNotice({ type: 'error', text: 'Could not load contacts' });
+    }
+  };
+
+  const handleSendCampaign = async () => {
+    if (!selectedContactIds.length) {
+      setNotice({ type: 'error', text: 'Select at least one contact' });
+      return;
+    }
     setLoading(true);
     try {
-      const { data } = await API.post(`/campaigns/${campaign.id}/send`);
+      const { data } = await API.post(`/campaigns/${campaignToSend.id}/send`, { contactIds: selectedContactIds });
       setNotice({ type: 'success', text: `${data.emailCount} emails added to the delivery queue` });
+      setSendDialog(false);
       refresh();
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not send campaign') });
@@ -237,7 +258,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                   </Box>
                   <Chip label={campaign.status} size="small" />
                   {campaign.status === 'draft' && (
-                    <Button size="small" variant="contained" startIcon={<Send size={15} />} disabled={loading} onClick={() => sendCampaign(campaign)}>
+                    <Button size="small" variant="contained" startIcon={<Send size={15} />} disabled={loading} onClick={() => openSendDialog(campaign)}>
                       Send
                     </Button>
                   )}
@@ -290,6 +311,39 @@ export default function CampaignDashboard({ onOpenDatabase }) {
           <Button variant="contained" disabled={loading || !formData.name || !formData.subject || !formData.htmlContent} onClick={handleCreateCampaign}>Create campaign</Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog open={sendDialog} onClose={() => setSendDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Typography variant="h5" fontWeight={800}>Select recipients</Typography>
+          <Typography variant="body2" color="text.secondary">Choose which contacts to send this campaign to.</Typography>
+        </DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: '12px !important', maxHeight: '400px', overflow: 'auto' }}>
+          {sendContacts.map((contact) => (
+            <Box key={contact.id} sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, borderRadius: 1, '&:hover': { bgcolor: 'action.hover' } }}>
+              <input
+                type="checkbox"
+                checked={selectedContactIds.includes(contact.id)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedContactIds([...selectedContactIds, contact.id]);
+                  } else {
+                    setSelectedContactIds(selectedContactIds.filter(id => id !== contact.id));
+                  }
+                }}
+              />
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" fontWeight={600}>{contact.email}</Typography>
+                <Typography variant="caption" color="text.secondary">{contact.name || 'No name'}</Typography>
+              </Box>
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+          <Button color="inherit" onClick={() => setSendDialog(false)}>Cancel</Button>
+          <Button variant="contained" disabled={loading || !selectedContactIds.length} onClick={handleSendCampaign}>Send to {selectedContactIds.length}</Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar open={Boolean(notice)} autoHideDuration={4500} onClose={() => setNotice(null)}>
         {notice && <Alert severity={notice.type} onClose={() => setNotice(null)}>{notice.text}</Alert>}
       </Snackbar>
