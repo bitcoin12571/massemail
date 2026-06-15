@@ -98,15 +98,17 @@ router.post('/', validateRequest(campaignSchema), async (req, res) => {
   }
 });
 
-router.post('/:id/send', emailSendLimiter, campaignSendLimiter, validateRequest(campaignSendSchema), async (req, res) => {
+router.post('/:id/send', emailSendLimiter, campaignSendLimiter, async (req, res) => {
   try {
     logger.info('CAMPAIGN', `Sending campaign ${req.params.id}`);
     const campaign = await Campaign.findOne({ where: { id: req.params.id, createdBy: req.user.id } });
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
 
     const where = { createdBy: req.user.id, status: 'active' };
-    // TESTING: Skip verification check for dev mode
-    if (req.body.contactIds?.length) where.id = req.body.contactIds;
+    // Send to all active contacts if none specified
+    if (req.body && req.body.contactIds && req.body.contactIds.length) {
+      where.id = req.body.contactIds;
+    }
     const contacts = await Contact.findAll({ where });
     if (!contacts.length) return res.status(400).json({ error: 'Add at least one active contact before sending' });
 
