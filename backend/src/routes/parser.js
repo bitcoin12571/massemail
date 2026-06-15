@@ -5,6 +5,7 @@ import logger from '../services/logger.js';
 const router = express.Router();
 
 // Upload and parse (auto-detect format: CSV, Plain Text, or JSON)
+// Optimized for large-scale bulk imports
 router.post('/upload-csv', async (req, res) => {
   try {
     const { csvContent, format } = req.body;
@@ -13,8 +14,11 @@ router.post('/upload-csv', async (req, res) => {
       return res.status(400).json({ error: 'Content required' });
     }
 
-    if (typeof csvContent !== 'string' || csvContent.length > 5 * 1024 * 1024) {
-      return res.status(413).json({ error: 'Content too large (max 5MB)' });
+    // NO SIZE LIMIT - let it handle as much as it can
+    // Vercel can handle files up to 4.5MB in request body
+    // For larger: user should use API directly or batch requests
+    if (typeof csvContent !== 'string') {
+      return res.status(400).json({ error: 'Content must be a string' });
     }
 
     let results, errors, totalProcessed;
@@ -60,23 +64,47 @@ router.post('/upload-csv', async (req, res) => {
       });
     }
 
-    // Save to database
-    const saved = await saveParsedEmails(results);
+    // Set a timeout for large imports (60 seconds max)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Import timeout: too many emails')), 60000)
+    );
 
-    logger.info('PARSER', `Imported ${saved.length} emails (format: ${detectedFormat})`);
+    // Save to database with timeout protection
+    let saved;
+    try {
+      saved = await Promise.race([
+        saveParsedEmails(results),
+        timeoutPromise
+      ]);
+    } catch (timeoutError) {
+      logger.warn('PARSER', `Import timeout for ${results.length} emails`);
+      return res.status(408).json({
+        error: 'Import took too long. Try uploading fewer emails at once.',
+        totalEmails: results.length,
+        format: detectedFormat
+      });
+    }
+
+    logger.info('PARSER', `Imported ${saved.length} emails (format: ${detectedFormat}, errors: ${errors.length})`);
+
+    // For large responses, only return summary (not individual emails)
+    const shouldReturnDetails = saved.length <= 100;
 
     res.json({
       success: true,
       totalProcessed,
       validEmails: saved.length,
       format: detectedFormat,
-      errors,
-      saved: saved.map(e => ({
-        id: e.id,
-        email: e.email,
-        region: e.region,
-        name: e.name
-      }))
+      errors: errors.length > 0 ? errors.slice(0, 20) : [], // Return first 20 errors only
+      errorCount: errors.length,
+      ...(shouldReturnDetails && {
+        saved: saved.map(e => ({
+          id: e.id,
+          email: e.email,
+          region: e.region,
+          name: e.name
+        }))
+      })
     });
   } catch (error) {
     logger.error('PARSER_UPLOAD', 'Upload error', error);

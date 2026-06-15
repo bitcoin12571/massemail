@@ -84,7 +84,25 @@ export async function parseCSV(csvContent) {
 
 export async function saveParsedEmails(emailsData) {
   try {
-    const saved = await ParsedEmail.bulkCreate(emailsData);
+    // Optimize for large batches: process in chunks
+    const BATCH_SIZE = 1000; // Insert 1000 at a time
+    const batches = [];
+
+    for (let i = 0; i < emailsData.length; i += BATCH_SIZE) {
+      const batch = emailsData.slice(i, i + BATCH_SIZE);
+      batches.push(
+        ParsedEmail.bulkCreate(batch, {
+          ignoreDuplicates: true, // Skip duplicates instead of failing
+          updateOnDuplicate: ['name', 'region'] // Update region/name if email exists
+        })
+      );
+    }
+
+    // Execute all batches in parallel
+    const results = await Promise.all(batches);
+
+    // Flatten results
+    const saved = results.flat();
     return saved;
   } catch (error) {
     throw new Error(`Failed to save parsed emails: ${error.message}`);
