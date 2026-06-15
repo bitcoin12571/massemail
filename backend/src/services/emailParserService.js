@@ -1,4 +1,5 @@
 import ParsedEmail from '../models/ParsedEmail.js';
+import Contact from '../models/Contact.js';
 
 // Validate email format
 function isValidEmail(email) {
@@ -291,7 +292,6 @@ export async function parseJSON(jsonContent) {
 // Auto-convert ParsedEmail to Contact for easier access
 export async function syncParsedEmailsToContacts(userId) {
   try {
-    const Contact = (await import('../models/Contact.js')).default;
     const parsed = await ParsedEmail.findAll({ where: { isValid: true }, raw: true });
 
     for (const p of parsed) {
