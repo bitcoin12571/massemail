@@ -4,6 +4,7 @@ import { Op } from 'sequelize';
 import Contact from '../models/Contact.js';
 import Campaign from '../models/Campaign.js';
 import Email from '../models/Email.js';
+import ParsedEmail from '../models/ParsedEmail.js';
 import { emailQueue } from '../services/queueService.js';
 import { isRealEmailDeliveryConfigured } from '../services/emailService.js';
 import { parseCSV } from '../utils/csvParser.js';
@@ -66,7 +67,6 @@ router.get('/', async (req, res) => {
         ];
       }
 
-      const ParsedEmail = (await import('../models/ParsedEmail.js')).default;
       const parsedEmails = await ParsedEmail.findAll({
         where: parsedWhere,
         limit: searchLimit,
