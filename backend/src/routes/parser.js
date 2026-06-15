@@ -29,7 +29,7 @@ router.post('/upload-csv', async (req, res) => {
       const trimmed = csvContent.trim();
       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
         detectedFormat = 'json';
-      } else if (!trimmed.includes(',') || trimmed.split('\n").length <= 2) {
+      } else if (!trimmed.includes(',') || trimmed.split('\n').length <= 2) {
         // Heuristic: if no commas or very few lines, likely plain text
         const lines = trimmed.split('\n').filter(l => l.trim());
         const hasCommas = lines.some(l => l.includes(','));
