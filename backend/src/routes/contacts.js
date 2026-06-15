@@ -30,7 +30,7 @@ function isValidEmail(email) {
   return EMAIL_REGEX.test(trimmed) && trimmed.length <= 254;
 }
 
-// Get all contacts (including ParsedEmail from Email Parser)
+// Get all contacts
 router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 500, search } = req.query;
@@ -38,9 +38,6 @@ router.get('/', async (req, res) => {
     const searchLimit = parseInt(limit);
 
     const where = { createdBy: req.user.id };
-    let contacts = [];
-
-    // Get from Contact table
     if (search) {
       where[Op.or] = [
         { email: { [Op.like]: `%${search}%` } },
@@ -55,9 +52,8 @@ router.get('/', async (req, res) => {
       order: [['createdAt', 'DESC']]
     });
 
-    contacts = rows;
-
-    // ALSO get from ParsedEmail table if user imported them
+    // Also get ParsedEmails from Email Parser
+    let parsedEmails = [];
     try {
       let parsedWhere = { isValid: true };
       if (search) {
@@ -66,48 +62,39 @@ router.get('/', async (req, res) => {
           { name: { [Op.like]: `%${search}%` } }
         ];
       }
-
-      const parsedEmails = await ParsedEmail.findAll({
+      parsedEmails = await ParsedEmail.findAll({
         where: parsedWhere,
         limit: searchLimit,
-        offset: 0,
         raw: true
       });
-
-      // Convert ParsedEmail to Contact format
-      const converted = parsedEmails.map(pe => ({
-        id: `parsed_${pe.id}`,
-        email: pe.email,
-        name: pe.name || '',
-        region: pe.region,
-        status: 'active',
-        verified: false,
-        createdAt: pe.createdAt,
-        source: 'email_parser'
-      }));
-
-      // Merge and dedupe by email
-      const mergedContacts = [...contacts, ...converted];
-      const deduped = Array.from(
-        new Map(mergedContacts.map(c => [c.email, c])).values()
-      );
-
-      res.json({
-        contacts: deduped.slice(0, searchLimit),
-        total: deduped.length,
-        page: parseInt(page),
-        pages: Math.ceil(deduped.length / searchLimit),
-        note: 'Includes imported emails from Email Parser'
-      });
-    } catch (parseError) {
-      logger.warn('CONTACTS', `ParsedEmail lookup failed: ${parseError.message}`);
-      res.json({
-        contacts,
-        total: count,
-        page: parseInt(page),
-        pages: Math.ceil(count / searchLimit)
-      });
+    } catch (err) {
+      logger.warn('CONTACTS', `ParsedEmail lookup failed: ${err.message}`);
     }
+
+    // Convert ParsedEmail to Contact format
+    const converted = parsedEmails.map(pe => ({
+      id: `parsed_${pe.id}`,
+      email: pe.email,
+      name: pe.name || '',
+      region: pe.region,
+      status: 'active',
+      verified: false,
+      createdAt: pe.createdAt,
+      source: 'email_parser'
+    }));
+
+    // Merge and dedupe by email
+    const allContacts = [...rows, ...converted];
+    const deduped = Array.from(
+      new Map(allContacts.map(c => [c.email, c])).values()
+    );
+
+    res.json({
+      contacts: deduped.slice(0, searchLimit),
+      total: deduped.length,
+      page: parseInt(page),
+      pages: Math.ceil(deduped.length / searchLimit)
+    });
   } catch (error) {
     logger.error('CONTACTS_GET', 'Get contacts error', error);
     res.status(500).json({ error: error.message });
