@@ -8,6 +8,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   IconButton,
   LinearProgress,
   Menu,
@@ -469,33 +470,161 @@ export default function CampaignDashboard({ onOpenDatabase }) {
       </Box>
 
       <Dialog className="responsive-dialog" open={Boolean(selectedStats)} onClose={() => setSelectedStats(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          <Typography variant="h5" fontWeight={800}>Statistici campanie</Typography>
-          <Typography variant="body2" color="text.secondary">{selectedStats?.name}</Typography>
+        <DialogTitle sx={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', color: 'white', pb: 3 }}>
+          <Typography variant="h5" fontWeight={900} sx={{ mb: 0.5 }}>📊 Statistici Campanie</Typography>
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>{selectedStats?.name}</Typography>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ pt: 3 }}>
           {selectedStats && (
-            <Box className="history-stats-grid">
-              <Box><Typography variant="caption">Destinatari</Typography><strong>{selectedStats.totalRecipients || 0}</strong></Box>
-              <Box><Typography variant="caption">Trimise</Typography><strong>{selectedStats.sentCount || 0}</strong></Box>
-              <Box><Typography variant="caption">Eșuate</Typography><strong>{selectedStats.failedCount || 0}</strong></Box>
-              <Box>
-                <Typography variant="caption">Rată succes</Typography>
-                <strong>{selectedStats.totalRecipients ? Math.round(((selectedStats.sentCount || 0) / selectedStats.totalRecipients) * 100) : 0}%</strong>
+            <Stack spacing={2.5}>
+              {/* Top 4 Stats Grid */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                {/* Destinatari */}
+                <Box sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, #e0e7ff 0%, #f0f4ff 100%)',
+                  border: '1px solid #c7d2fe',
+                  textAlign: 'center'
+                }}>
+                  <Typography variant="caption" sx={{ color: '#6366f1', fontWeight: 600, textTransform: 'uppercase' }}>
+                    👥 Destinatari
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 900, color: '#4f46e5', mt: 1 }}>
+                    {selectedStats.totalRecipients || 0}
+                  </Typography>
+                </Box>
+
+                {/* Trimise */}
+                <Box sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, #dcfce7 0%, #ecfdf5 100%)',
+                  border: '1px solid #86efac',
+                  textAlign: 'center'
+                }}>
+                  <Typography variant="caption" sx={{ color: '#15803d', fontWeight: 600, textTransform: 'uppercase' }}>
+                    ✅ Trimise
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 900, color: '#16a34a', mt: 1 }}>
+                    {selectedStats.sentCount || 0}
+                  </Typography>
+                </Box>
+
+                {/* Eșuate */}
+                <Box sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, #fee2e2 0%, #fef2f2 100%)',
+                  border: '1px solid #fca5a5',
+                  textAlign: 'center'
+                }}>
+                  <Typography variant="caption" sx={{ color: '#991b1b', fontWeight: 600, textTransform: 'uppercase' }}>
+                    ❌ Eșuate
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 900, color: '#dc2626', mt: 1 }}>
+                    {selectedStats.failedCount || 0}
+                  </Typography>
+                </Box>
+
+                {/* Rată Succes */}
+                <Box sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  background: 'linear-gradient(135deg, #fef3c7 0%, #fefce8 100%)',
+                  border: '1px solid #fcd34d',
+                  textAlign: 'center'
+                }}>
+                  <Typography variant="caption" sx={{ color: '#92400e', fontWeight: 600, textTransform: 'uppercase' }}>
+                    📈 Rată Succes
+                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 900, color: '#b45309', mt: 1 }}>
+                    {selectedStats.totalRecipients ? Math.round(((selectedStats.sentCount || 0) / selectedStats.totalRecipients) * 100) : 0}%
+                  </Typography>
+                </Box>
               </Box>
-              <Box className="history-stats-wide">
-                <Typography variant="caption">Subiect</Typography>
-                <strong>{selectedStats.subject || '-'}</strong>
+
+              <Divider sx={{ my: 1 }} />
+
+              {/* Subiect */}
+              <Box sx={{
+                p: 2,
+                borderRadius: 2,
+                background: '#f9fafb',
+                border: '1px solid #e5e7eb'
+              }}>
+                <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>
+                  📨 Subiect
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.75, color: '#1f2937', wordBreak: 'break-word' }}>
+                  {selectedStats.subject || '-'}
+                </Typography>
               </Box>
-              <Box className="history-stats-wide">
-                <Typography variant="caption">Data trimiterii</Typography>
-                <strong>{new Date(selectedStats.sentAt || selectedStats.createdAt).toLocaleString()}</strong>
+
+              {/* Data Trimiterii */}
+              <Box sx={{
+                p: 2,
+                borderRadius: 2,
+                background: '#f9fafb',
+                border: '1px solid #e5e7eb'
+              }}>
+                <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>
+                  🕐 Data Trimiterii
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.75, color: '#1f2937' }}>
+                  {new Date(selectedStats.sentAt || selectedStats.createdAt).toLocaleString('ro-RO', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                  })}
+                </Typography>
               </Box>
-            </Box>
+
+              {/* Success Rate Progress Bar */}
+              {selectedStats.totalRecipients > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: '#374151' }}>
+                      Progres Livrare
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: '#16a34a' }}>
+                      {Math.round(((selectedStats.sentCount || 0) / selectedStats.totalRecipients) * 100)}%
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.round(((selectedStats.sentCount || 0) / selectedStats.totalRecipients) * 100)}
+                    sx={{
+                      height: 8,
+                      borderRadius: 10,
+                      backgroundColor: '#e5e7eb',
+                      '& .MuiLinearProgress-bar': {
+                        background: 'linear-gradient(90deg, #10b981 0%, #059669 100%)',
+                        borderRadius: 10
+                      }
+                    }}
+                  />
+                </Box>
+              )}
+            </Stack>
           )}
         </DialogContent>
-        <DialogActions className="responsive-dialog-actions">
-          <Button variant="contained" onClick={() => setSelectedStats(null)}>Închide</Button>
+        <DialogActions sx={{ p: 3, pt: 2, background: '#f9fafb', borderTop: '1px solid #e5e7eb' }}>
+          <Button
+            variant="contained"
+            onClick={() => setSelectedStats(null)}
+            sx={{
+              background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)',
+              color: 'white',
+              fontWeight: 700,
+              px: 3
+            }}
+          >
+            Închide
+          </Button>
         </DialogActions>
       </Dialog>
 
