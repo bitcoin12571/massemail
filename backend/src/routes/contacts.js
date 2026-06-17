@@ -17,6 +17,10 @@ import {
   sendVerificationEmail,
   sendConfirmationEmail
 } from '../services/verificationService.js';
+import {
+  generateChisinauTestContacts,
+  isReservedTestEmail
+} from '../services/chisinauTestDataService.js';
 
 const router = express.Router();
 
@@ -29,11 +33,60 @@ function isValidEmail(email) {
   return EMAIL_REGEX.test(trimmed) && trimmed.length <= 254;
 }
 
+function getRecipientDisplayName(contact) {
+  return String(contact?.company || contact?.name || contact?.email || '').trim();
+}
+
+function buildRecipientCampaignName(contacts = []) {
+  const names = contacts
+    .map(getRecipientDisplayName)
+    .filter(Boolean);
+
+  if (names.length === 0) return 'Email campaign';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]}, ${names[1]}`;
+  return `${names[0]}, ${names[1]} + încă ${names.length - 2}`;
+}
+
+async function createContactFromSnapshot(snapshot, userId) {
+  if (!snapshot || (snapshot.status && snapshot.status !== 'active') || !isValidEmail(snapshot.email)) return null;
+
+  const normalizedEmail = snapshot.email.toLowerCase().trim();
+  const existingContact = await Contact.findOne({
+    where: { email: normalizedEmail, createdBy: userId }
+  });
+
+  if (existingContact) {
+    if (existingContact.status !== 'active') return null;
+    return existingContact;
+  }
+
+  try {
+    return await Contact.create({
+      id: snapshot.id,
+      email: normalizedEmail,
+      name: snapshot.name?.trim() || null,
+      status: 'active',
+      verified: true,
+      createdBy: userId
+    });
+  } catch (error) {
+    if (error.name !== 'SequelizeUniqueConstraintError') throw error;
+
+    const contact = await Contact.findOne({
+      where: { email: normalizedEmail, createdBy: userId, status: 'active' }
+    });
+    return contact || null;
+  }
+}
+
 // Get all contacts
 router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 20, search } = req.query;
-    const offset = (page - 1) * limit;
+    const safePage = Math.max(Number.parseInt(page, 10) || 1, 1);
+    const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 500);
+    const offset = (safePage - 1) * safeLimit;
 
     const where = { createdBy: req.user.id };
     if (search) {
@@ -45,7 +98,7 @@ router.get('/', async (req, res) => {
 
     const { count, rows } = await Contact.findAndCountAll({
       where,
-      limit: parseInt(limit),
+      limit: safeLimit,
       offset,
       order: [['createdAt', 'DESC']]
     });
@@ -53,11 +106,43 @@ router.get('/', async (req, res) => {
     res.json({
       contacts: rows,
       total: count,
-      page: parseInt(page),
-      pages: Math.ceil(count / limit)
+      page: safePage,
+      pages: Math.ceil(count / safeLimit)
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Generate non-deliverable contacts for high-volume UI and database testing.
+router.post('/generate-chisinau-test', contactImportLimiter, async (req, res) => {
+  try {
+    const contacts = generateChisinauTestContacts(req.body?.count, req.user.id);
+    const chunkSize = 500;
+
+    for (let index = 0; index < contacts.length; index += chunkSize) {
+      await Contact.bulkCreate(contacts.slice(index, index + chunkSize), {
+        ignoreDuplicates: true
+      });
+    }
+
+    const total = await Contact.count({
+      where: {
+        createdBy: req.user.id,
+        email: { [Op.like]: '%@mailora.invalid' }
+      }
+    });
+
+    res.json({
+      success: true,
+      requested: contacts.length,
+      total,
+      sectors: ['Botanica', 'Buiucani', 'Centru', 'Ciocana', 'Rîșcani'],
+      deliverable: false
+    });
+  } catch (error) {
+    logger.error('CHISINAU_TEST_DATA', 'Generation failed', error);
+    res.status(500).json({ error: 'Baza de test nu a putut fi generată' });
   }
 });
 
@@ -73,7 +158,7 @@ router.post('/', validateRequest(contactSchema), async (req, res) => {
       email: email.toLowerCase().trim(),
       name,
       tags: tags || [],
-      verified: true,  // Auto-verified for immediate sending
+      verified: false,
       verificationToken: null,
       verificationTokenExpiry: null,
       customData: customData || {},
@@ -90,7 +175,7 @@ router.post('/', validateRequest(contactSchema), async (req, res) => {
 
     res.status(201).json({
       ...contact.toJSON(),
-      message: 'Contact created. Verification email sent.'
+      message: 'Contact created as unverified.'
     });
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
@@ -136,6 +221,7 @@ router.post('/import', contactImportLimiter, async (req, res) => {
     const contacts = parsed.map((contact) => ({
       ...contact,
       email: contact.email.toLowerCase().trim(),
+      verified: false,
       createdBy: req.user.id
     }));
 
@@ -175,10 +261,12 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
       return res.status(400).json({ error: 'Subject and message are required' });
     }
 
+    const requestedContactIds = [...new Set(contactIds.filter(Boolean))];
+
     console.log('[SEND-NOW] Finding contacts...');
     let contacts = await Contact.findAll({
       where: {
-        id: contactIds,
+        id: requestedContactIds,
         createdBy: req.user.id,
         status: 'active'
       }
@@ -186,37 +274,29 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
 
     console.log('[SEND-NOW] Found contacts:', contacts.length);
 
-    const hasPersistentDatabase = process.env.DATABASE_URL?.startsWith('postgres');
-    if (process.env.VERCEL && !hasPersistentDatabase && contacts.length < contactIds.length) {
-      const existingIds = new Set(contacts.map((contact) => contact.id));
+    const resolvedRequestedIds = new Set(contacts.map((contact) => contact.id));
+    const contactEmails = new Set(contacts.map((contact) => contact.email.toLowerCase()));
+
+    if (contacts.length < requestedContactIds.length) {
       const snapshotsById = new Map(
         (Array.isArray(recipientSnapshots) ? recipientSnapshots : [])
-          .filter((recipient) => contactIds.includes(recipient.id))
+          .filter((recipient) => requestedContactIds.includes(recipient.id))
           .map((recipient) => [recipient.id, recipient])
       );
 
-      for (const contactId of contactIds) {
-        if (existingIds.has(contactId)) continue;
+      for (const contactId of requestedContactIds) {
+        if (resolvedRequestedIds.has(contactId)) continue;
 
         const snapshot = snapshotsById.get(contactId);
-        if (!snapshot || snapshot.status !== 'active' || !isValidEmail(snapshot.email)) continue;
+        const contact = await createContactFromSnapshot(snapshot, req.user.id);
 
-        const normalizedEmail = snapshot.email.toLowerCase().trim();
-        const [contact] = await Contact.findOrCreate({
-          where: { email: normalizedEmail },
-          defaults: {
-            id: contactId,
-            email: normalizedEmail,
-            name: snapshot.name?.trim() || null,
-            status: 'active',
-            verified: true,
-            createdBy: req.user.id
+        if (contact) {
+          const normalizedEmail = contact.email.toLowerCase();
+          if (!contactEmails.has(normalizedEmail)) {
+            contacts.push(contact);
+            contactEmails.add(normalizedEmail);
           }
-        });
-
-        if (contact.createdBy === req.user.id && contact.status === 'active') {
-          contacts.push(contact);
-          existingIds.add(contact.id);
+          resolvedRequestedIds.add(contactId);
         }
       }
     }
@@ -225,12 +305,27 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
       return res.status(400).json({ error: 'No active recipients were found.' });
     }
 
+    if (resolvedRequestedIds.size < requestedContactIds.length) {
+      return res.status(400).json({
+        error: `Nu am putut pregăti ${requestedContactIds.length - resolvedRequestedIds.size} destinatar(i) selectați. Reîncarcă lista și încearcă din nou.`,
+        requestedCount: requestedContactIds.length,
+        resolvedCount: resolvedRequestedIds.size
+      });
+    }
+
     // Validate all recipient emails before sending
     const invalidEmails = contacts.filter(c => !isValidEmail(c.email));
     if (invalidEmails.length > 0) {
       return res.status(400).json({
         error: `Cannot send: ${invalidEmails.length} recipient(s) have invalid email addresses`,
         invalidEmails: invalidEmails.map(c => ({ name: c.name, email: c.email }))
+      });
+    }
+
+    const testEmails = contacts.filter(contact => isReservedTestEmail(contact.email));
+    if (testEmails.length > 0) {
+      return res.status(400).json({
+        error: `Ai selectat ${testEmails.length} adrese de test. Acestea verifică volumul și nu pot primi emailuri reale.`
       });
     }
 
@@ -243,7 +338,7 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
 
     const attachments = serializeUploadedFiles(req.files);
     const campaign = await Campaign.create({
-      name: `Quick send - ${new Date().toLocaleString('en-GB')}`,
+      name: buildRecipientCampaignName(contacts),
       subject: subject.trim(),
       htmlContent: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
       textContent: message.trim(),
@@ -296,23 +391,20 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
     );
 
     const failedCount = results.filter((result) => result.status === 'rejected').length;
-    if (failedCount > 0) {
-      await campaign.update({ status: 'paused' });
-      return res.status(502).json({
-        error: `${failedCount} of ${contacts.length} email(s) could not be sent.`,
-        recipientCount: contacts.length,
-        failedCount
-      });
-    }
-
-    await campaign.update({ status: 'sent', sentAt: new Date() });
+    const sentCount = contacts.length - failedCount;
+    await campaign.update({
+      status: failedCount ? 'paused' : 'sent',
+      sentAt: sentCount > 0 ? new Date() : null
+    });
 
     res.status(200).json({
       success: true,
       campaignId: campaign.id,
+      campaignName: campaign.name,
       recipientCount: contacts.length,
-      sentCount: contacts.length,
-      status: 'sent'
+      sentCount,
+      failedCount,
+      status: failedCount ? 'completed_with_errors' : 'sent'
     });
   } catch (error) {
     console.error('[SEND-NOW] ERROR:', error.message);
@@ -454,6 +546,19 @@ router.post('/:id/resend-verification', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete all contacts owned by the authenticated user.
+router.delete('/', async (req, res) => {
+  try {
+    const deleted = await Contact.destroy({
+      where: { createdBy: req.user.id }
+    });
+    res.json({ success: true, deleted });
+  } catch (error) {
+    logger.error('CONTACT_DELETE_ALL', 'Delete all failed', error);
+    res.status(500).json({ error: 'Nu au putut fi șterse toate contactele' });
   }
 });
 

@@ -1,13 +1,15 @@
 import logger from '../services/logger.js';
 import express from 'express';
-import { createBulkCampaign, sendBulkCampaign, getCampaignStats, getAllCampaigns, deleteCampaign } from '../services/bulkSenderService.js';
+import { createBulkCampaign, sendBulkCampaign, sendBulkCampaignDirect, getCampaignStats, getAllCampaigns, deleteCampaign } from '../services/bulkSenderService.js';
+import { bulkAttachmentUpload, serializeUploadedFiles } from '../middleware/upload.js';
 
 const router = express.Router();
 
 // Create new campaign
-router.post('/campaign', async (req, res) => {
+router.post('/campaign', bulkAttachmentUpload.array('attachments'), async (req, res) => {
   try {
-    const { name, subject, htmlTemplate, region, totalRecipients } = req.body;
+    const { name, subject, htmlTemplate, totalRecipients } = req.body ?? {};
+    const attachments = serializeUploadedFiles(req.files);
 
     if (!name || !subject || !htmlTemplate) {
       return res.status(400).json({ error: 'Missing required fields: name, subject, htmlTemplate' });
@@ -17,14 +19,16 @@ router.post('/campaign', async (req, res) => {
       name,
       subject,
       htmlTemplate,
-      region,
       totalRecipients
     });
 
     res.status(201).json({
       success: true,
       campaignId: campaign.id,
-      campaign: campaign.toJSON()
+      campaign: {
+        ...campaign.toJSON(),
+        attachments
+      }
     });
   } catch (error) {
     console.error('Campaign creation error:', error);
@@ -32,13 +36,23 @@ router.post('/campaign', async (req, res) => {
   }
 });
 
-// Send campaign to specific emails or region
+// Send campaign to selected recipients.
 router.post('/campaign/:campaignId/send', async (req, res) => {
   try {
     const { campaignId } = req.params;
-    const { emailIds } = req.body; // Optional: specific email IDs
+    const { emailIds, recipients, campaign } = req.body ?? {};
 
-    const result = await sendBulkCampaign(parseInt(campaignId), emailIds);
+    if (!Number.isInteger(Number(campaignId))) {
+      return res.status(400).json({ error: 'Invalid campaign ID' });
+    }
+
+    if (emailIds !== undefined && !Array.isArray(emailIds)) {
+      return res.status(400).json({ error: 'emailIds must be an array' });
+    }
+
+    const result = Array.isArray(recipients) && campaign
+      ? await sendBulkCampaignDirect(campaign, recipients)
+      : await sendBulkCampaign(parseInt(campaignId), emailIds);
 
     res.json({
       success: true,
@@ -73,14 +87,16 @@ router.get('/campaigns', async (req, res) => {
         id: c.id,
         name: c.name,
         subject: c.subject,
-        region: c.region,
+        htmlTemplate: c.htmlTemplate,
         status: c.status,
         totalRecipients: c.totalRecipients,
         sentCount: c.sentCount,
         failedCount: c.failedCount,
         openedCount: c.openedCount,
         clickedCount: c.clickedCount,
-        createdAt: c.createdAt
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        completedAt: c.completedAt
       }))
     });
   } catch (error) {

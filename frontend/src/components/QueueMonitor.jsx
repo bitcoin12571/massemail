@@ -12,11 +12,12 @@ import {
   Typography
 } from '@mui/material';
 import { CheckCircle2, Clock3, RefreshCw, RotateCcw, Trash2, Zap } from 'lucide-react';
-import API, { getApiErrorMessage } from '../services/api';
+import API from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { useUserPreferences } from '../contexts/UserPreferencesContext';
 import QueueVisualization from './QueueVisualization';
 import { slideUp, containerVariants } from '../utils/animations';
+import { getLocalSendHistory } from '../utils/localHistory';
 
 const emptyStats = { waiting: 0, active: 0, completed: 0, failed: 0, total: 0 };
 
@@ -28,27 +29,52 @@ export default function QueueMonitor() {
   const [notice, setNotice] = useState(null);
 
   const fetchStats = async () => {
+    const history = getLocalSendHistory();
+    const localCompleted = history.reduce((sum, entry) => sum + (Number(entry.sentCount) || 0), 0);
+    const localFailed = history.reduce((sum, entry) => sum + (Number(entry.failedCount) || 0), 0);
+    const localTotal = localCompleted + localFailed;
+
     try {
       const { data } = await API.get('/queue/stats');
       // Combine in-memory and persisted stats
       const combined = {
         waiting: (data.inMemory?.waiting || 0) + (data.persisted?.waiting || 0),
         active: (data.inMemory?.active || 0) + (data.persisted?.active || 0),
-        completed: (data.inMemory?.completed || 0) + (data.persisted?.completed || 0),
-        failed: (data.inMemory?.failed || 0) + (data.persisted?.failed || 0),
-        total: data.total || 0
+        completed: Math.max(
+          (data.inMemory?.completed || 0) + (data.persisted?.completed || 0),
+          localCompleted
+        ),
+        failed: Math.max(
+          (data.inMemory?.failed || 0) + (data.persisted?.failed || 0),
+          localFailed
+        ),
+        total: Math.max(data.total || 0, localTotal)
       };
       setStats(combined);
     } catch (error) {
-      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not connect to the queue') });
+      setStats({
+        waiting: 0,
+        active: 0,
+        completed: localCompleted,
+        failed: localFailed,
+        total: localTotal
+      });
     }
   };
 
   useEffect(() => {
     fetchStats();
-    if (!preferences.autoRefreshQueue || !preferences.refreshInterval) return undefined;
-    const interval = setInterval(fetchStats, preferences.refreshInterval);
-    return () => clearInterval(interval);
+    const handleHistoryUpdate = () => fetchStats();
+    window.addEventListener('mailora:history-updated', handleHistoryUpdate);
+
+    const interval = preferences.autoRefreshQueue && preferences.refreshInterval
+      ? setInterval(fetchStats, preferences.refreshInterval)
+      : null;
+
+    return () => {
+      if (interval) clearInterval(interval);
+      window.removeEventListener('mailora:history-updated', handleHistoryUpdate);
+    };
   }, [preferences.autoRefreshQueue, preferences.refreshInterval]);
 
   const action = async (endpoint, successText) => {
@@ -106,7 +132,7 @@ export default function QueueMonitor() {
         <Box className="panel-header">
           <Box>
             <Typography variant="h6">{t('deliveryProgress')}</Typography>
-            <Typography variant="body2" color="text.secondary">Current session activity</Typography>
+            <Typography variant="body2" color="text.secondary">Activitate salvată în browser</Typography>
           </Box>
           <Stack direction="row" spacing={1}>
             <Button variant="outlined" color="error" startIcon={<Trash2 size={16} />} disabled={!stats.failed || loading} onClick={() => action(null, t('clearFailed'))}>{t('clearFailed')}</Button>

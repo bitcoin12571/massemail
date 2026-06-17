@@ -1,10 +1,46 @@
 import ParsedEmail from '../models/ParsedEmail.js';
 import Contact from '../models/Contact.js';
+import { col, fn, Op } from 'sequelize';
 
 // Validate email format
 function isValidEmail(email) {
   const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return regex.test(email);
+}
+
+function splitDelimitedRow(row, delimiter) {
+  const values = [];
+  let value = '';
+  let quoted = false;
+
+  for (let index = 0; index < row.length; index += 1) {
+    const character = row[index];
+
+    if (character === '"' && quoted && row[index + 1] === '"') {
+      value += '"';
+      index += 1;
+    } else if (character === '"') {
+      quoted = !quoted;
+    } else if (character === delimiter && !quoted) {
+      values.push(value.trim());
+      value = '';
+    } else {
+      value += character;
+    }
+  }
+
+  values.push(value.trim());
+  return values;
+}
+
+function detectDelimiter(row) {
+  const commaColumns = splitDelimitedRow(row, ',').length;
+  const semicolonColumns = splitDelimitedRow(row, ';').length;
+  return semicolonColumns > commaColumns ? ';' : ',';
+}
+
+function normalizeEmail(value) {
+  return String(value || '').replace(/^\uFEFF/, '').trim().toLowerCase();
 }
 
 // Guess region from email domain or name
@@ -37,25 +73,37 @@ function guessRegion(email, name = '') {
 
 export async function parseCSV(csvContent) {
   try {
-    const lines = csvContent.split('\n').filter(line => line.trim());
+    if (typeof csvContent !== 'string' || !csvContent.trim()) {
+      return { results: [], errors: [], totalProcessed: 0 };
+    }
+
+    const lines = csvContent.split(/\r?\n/).filter(line => line.trim());
     const results = [];
     const errors = [];
+    const delimiter = detectDelimiter(lines[0]);
+    const firstRow = splitDelimitedRow(lines[0], delimiter)
+      .map(value => value.replace(/^\uFEFF/, '').trim().toLowerCase());
+    const hasHeader = firstRow.some(value => ['email', 'email address', 'e-mail'].includes(value));
 
-    // Skip header if present
-    let startIdx = 0;
-    if (lines[0]?.toLowerCase().includes('email')) {
-      startIdx = 1;
-    }
+    const startIdx = hasHeader ? 1 : 0;
+    const emailIndex = hasHeader
+      ? firstRow.findIndex(value => ['email', 'email address', 'e-mail'].includes(value))
+      : 0;
+    const nameIndex = hasHeader
+      ? firstRow.findIndex(value => ['name', 'full name', 'nume'].includes(value))
+      : 1;
+    const regionIndex = hasHeader
+      ? firstRow.findIndex(value => ['region', 'regiune', 'location'].includes(value))
+      : 2;
 
     for (let i = startIdx; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Parse CSV line (email, name, region)
-      const parts = line.split(',').map(p => p.trim());
-      const email = parts[0];
-      const name = parts[1] || '';
-      let region = parts[2] || '';
+      const parts = splitDelimitedRow(line, delimiter);
+      const email = normalizeEmail(parts[emailIndex]);
+      const name = nameIndex >= 0 ? parts[nameIndex]?.trim() || '' : '';
+      let region = regionIndex >= 0 ? parts[regionIndex]?.trim() || '' : '';
 
       // Validate email
       if (!isValidEmail(email)) {
@@ -85,25 +133,28 @@ export async function parseCSV(csvContent) {
 
 export async function saveParsedEmails(emailsData) {
   try {
-    // Optimize for large batches: process in chunks
-    const BATCH_SIZE = 1000; // Insert 1000 at a time
-    const batches = [];
+    const uniqueEmails = [...new Map(
+      emailsData
+        .filter(item => item?.email)
+        .map(item => [item.email.toLowerCase(), {
+          ...item,
+          email: item.email.toLowerCase()
+        }])
+    ).values()];
+    const BATCH_SIZE = 1000;
+    const saved = [];
 
-    for (let i = 0; i < emailsData.length; i += BATCH_SIZE) {
-      const batch = emailsData.slice(i, i + BATCH_SIZE);
-      batches.push(
-        ParsedEmail.bulkCreate(batch, {
-          ignoreDuplicates: true, // Skip duplicates instead of failing
-          updateOnDuplicate: ['name', 'region'] // Update region/name if email exists
-        })
-      );
+    for (let i = 0; i < uniqueEmails.length; i += BATCH_SIZE) {
+      const batch = uniqueEmails.slice(i, i + BATCH_SIZE);
+      const existing = await ParsedEmail.findAll({
+        where: { email: { [Op.in]: batch.map(item => item.email) } }
+      });
+      const existingEmails = new Set(existing.map(item => item.email.toLowerCase()));
+      const missing = batch.filter(item => !existingEmails.has(item.email));
+      const created = missing.length ? await ParsedEmail.bulkCreate(missing) : [];
+      saved.push(...existing, ...created);
     }
 
-    // Execute all batches in parallel
-    const results = await Promise.all(batches);
-
-    // Flatten results
-    const saved = results.flat();
     return saved;
   } catch (error) {
     throw new Error(`Failed to save parsed emails: ${error.message}`);
@@ -142,7 +193,7 @@ export async function getRegionStats() {
     const stats = await ParsedEmail.findAll({
       attributes: [
         'region',
-        [require('sequelize').fn('COUNT', require('sequelize').col('id')), 'count']
+        [fn('COUNT', col('id')), 'count']
       ],
       group: ['region'],
       raw: true
@@ -190,7 +241,7 @@ export async function parsePlainText(textContent) {
     const errors = [];
 
     for (let i = 0; i < lines.length; i++) {
-      const email = lines[i].trim().toLowerCase();
+      const email = normalizeEmail(lines[i]);
       if (!email) continue;
 
       // Validate email
@@ -206,7 +257,7 @@ export async function parsePlainText(textContent) {
         email,
         name: '',
         region,
-        source: 'plaintext_upload',
+        source: 'csv_upload',
         isValid: true
       });
     }
@@ -248,11 +299,11 @@ export async function parseJSON(jsonContent) {
       let region = '';
 
       if (typeof item === 'string') {
-        email = item.toLowerCase().trim();
+        email = normalizeEmail(item);
       } else if (typeof item === 'object' && item !== null) {
-        email = (item.email || '').toLowerCase().trim();
-        name = item.name || '';
-        region = item.region || '';
+        email = normalizeEmail(item.email);
+        name = String(item.name || '').trim();
+        region = String(item.region || '').trim();
       } else {
         errors.push({ line: i + 1, reason: 'Invalid format - must be string or object' });
         continue;
@@ -278,7 +329,7 @@ export async function parseJSON(jsonContent) {
         email,
         name,
         region: region.toLowerCase(),
-        source: 'json_upload',
+        source: 'csv_upload',
         isValid: true
       });
     }

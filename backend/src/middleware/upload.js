@@ -32,6 +32,11 @@ export const attachmentUpload = multer({
   fileFilter
 });
 
+export const bulkAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter
+});
+
 export function serializeUploadedFiles(files = []) {
   return files.map((file) => ({
     filename: path.basename(file.originalname).replace(/[\u0000-\u001f\u007f]/g, '_'),

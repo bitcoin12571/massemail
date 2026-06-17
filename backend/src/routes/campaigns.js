@@ -24,6 +24,35 @@ function getDateFilter(value) {
   return from;
 }
 
+function buildCampaignSummaries(statusRows = []) {
+  const summaries = new Map();
+  const sentStatuses = new Set(['sent', 'delivered', 'opened', 'clicked']);
+
+  statusRows.forEach((row) => {
+    const campaignId = row.campaignId;
+    const count = Number(row.count) || 0;
+    const summary = summaries.get(campaignId) || {
+      totalRecipients: 0,
+      sentCount: 0,
+      failedCount: 0,
+      pendingCount: 0,
+      openedCount: 0,
+      clickedCount: 0
+    };
+
+    summary.totalRecipients += count;
+    if (sentStatuses.has(row.status)) summary.sentCount += count;
+    if (row.status === 'failed' || row.status === 'bounced') summary.failedCount += count;
+    if (row.status === 'pending') summary.pendingCount += count;
+    if (row.status === 'opened') summary.openedCount += count;
+    if (row.status === 'clicked') summary.clickedCount += count;
+
+    summaries.set(campaignId, summary);
+  });
+
+  return summaries;
+}
+
 router.get('/overview', async (req, res) => {
   try {
     const from = getDateFilter(req.query.days);
@@ -40,12 +69,15 @@ router.get('/overview', async (req, res) => {
     const campaigns = campaignIds.length;
     const contacts = await Contact.count({ where: contactWhere });
     const sent = await Email.count({ where: { ...emailScope, status: { [Op.in]: ['sent', 'delivered', 'opened', 'clicked'] } } });
+    const failed = await Email.count({ where: { ...emailScope, status: { [Op.in]: ['failed', 'bounced'] } } });
     const opened = await Email.count({ where: { ...emailScope, status: { [Op.in]: ['opened', 'clicked'] } } });
     const clicked = await Email.count({ where: { ...emailScope, status: 'clicked' } });
     res.json({
       campaigns,
       contacts,
       sent,
+      failed,
+      successRate: sent + failed ? Math.round((sent / (sent + failed)) * 100) : 0,
       openRate: sent ? Math.round((opened / sent) * 100) : 0,
       clickRate: sent ? Math.round((clicked / sent) * 100) : 0
     });
@@ -76,7 +108,30 @@ router.get('/', async (req, res) => {
       order: [['createdAt', 'DESC']],
       limit: 50
     });
-    res.json(campaigns);
+
+    const campaignIds = campaigns.map((campaign) => campaign.id);
+    const statusRows = campaignIds.length
+      ? await Email.findAll({
+        where: { campaignId: { [Op.in]: campaignIds } },
+        attributes: ['campaignId', 'status', [fn('COUNT', col('*')), 'count']],
+        group: ['campaignId', 'status'],
+        raw: true
+      })
+      : [];
+    const summaries = buildCampaignSummaries(statusRows);
+
+    res.json(campaigns.map((campaign) => {
+      const summary = summaries.get(campaign.id) || {};
+      return {
+        ...campaign.toJSON(),
+        totalRecipients: summary.totalRecipients || 0,
+        sentCount: summary.sentCount || 0,
+        failedCount: summary.failedCount || 0,
+        pendingCount: summary.pendingCount || 0,
+        openedCount: summary.openedCount || 0,
+        clickedCount: summary.clickedCount || 0
+      };
+    }));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

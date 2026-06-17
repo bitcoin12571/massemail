@@ -4,7 +4,6 @@ import {
   Alert,
   Box,
   Button,
-  Card,
   LinearProgress,
   Paper,
   Snackbar,
@@ -19,20 +18,23 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel
+  DialogActions
 } from '@mui/material';
-import { Send, BarChart3, Trash2, Eye, Click, AlertCircle } from 'lucide-react';
+import { Send, BarChart3, ImagePlus, Trash2, X } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
+import { addLocalSendHistory } from '../utils/localHistory';
+import { getLocalContacts } from '../utils/localContacts';
+import {
+  mergeCampaigns,
+  removeLocalCampaign,
+  saveLocalCampaign,
+  saveLocalCampaigns
+} from '../utils/localCampaigns';
 
 export default function BulkSender() {
   const { t } = useLanguage();
   const [campaigns, setCampaigns] = useState([]);
-  const [regions, setRegions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
@@ -41,30 +43,49 @@ export default function BulkSender() {
   const [formData, setFormData] = useState({
     name: '',
     subject: '',
-    htmlTemplate: '',
-    region: ''
+    htmlTemplate: ''
   });
+  const [attachments, setAttachments] = useState([]);
+
+  const getLocalRecipients = () => {
+    return getLocalContacts();
+  };
+
+  const closeCreateDialog = () => {
+    setOpenDialog(false);
+    setFormData({ name: '', subject: '', htmlTemplate: '' });
+    setAttachments([]);
+  };
 
   useEffect(() => {
     fetchCampaigns();
-    fetchRegions();
+    const handleCampaignsUpdate = () => setCampaigns(mergeCampaigns());
+    window.addEventListener('mailora:campaigns-updated', handleCampaignsUpdate);
+    return () => window.removeEventListener('mailora:campaigns-updated', handleCampaignsUpdate);
   }, []);
 
   const fetchCampaigns = async () => {
     try {
       const { data } = await API.get('/bulk-sender/campaigns');
-      setCampaigns(data.campaigns);
+      saveLocalCampaigns(data.campaigns);
+      setCampaigns(mergeCampaigns(data.campaigns));
+      data.campaigns
+        .filter(campaign => campaign.status === 'completed')
+        .forEach(campaign => addLocalSendHistory({
+          id: `bulk-${campaign.id}`,
+          source: 'bulk',
+          name: campaign.name,
+          subject: campaign.subject,
+          totalRecipients: campaign.totalRecipients,
+          sentCount: campaign.sentCount,
+          failedCount: campaign.failedCount,
+          openedCount: campaign.openedCount,
+          clickedCount: campaign.clickedCount,
+          createdAt: campaign.createdAt,
+          sentAt: campaign.completedAt || campaign.updatedAt || campaign.createdAt
+        }));
     } catch (error) {
-      console.error('Failed to fetch campaigns:', error);
-    }
-  };
-
-  const fetchRegions = async () => {
-    try {
-      const { data } = await API.get('/parser/regions');
-      setRegions(data.regions);
-    } catch (error) {
-      console.error('Failed to fetch regions:', error);
+      setCampaigns(mergeCampaigns());
     }
   };
 
@@ -76,10 +97,16 @@ export default function BulkSender() {
 
     setLoading(true);
     try {
-      const { data } = await API.post('/bulk-sender/campaign', formData);
-      setCampaigns([...campaigns, data.campaign]);
-      setFormData({ name: '', subject: '', htmlTemplate: '', region: '' });
-      setOpenDialog(false);
+      const payload = new FormData();
+      payload.append('name', formData.name);
+      payload.append('subject', formData.subject);
+      payload.append('htmlTemplate', formData.htmlTemplate);
+      attachments.forEach(file => payload.append('attachments', file));
+
+      const { data } = await API.post('/bulk-sender/campaign', payload);
+      saveLocalCampaign(data.campaign);
+      setCampaigns(mergeCampaigns([data.campaign]));
+      closeCreateDialog();
       setNotice({ type: 'success', text: t('campaignCreatedSuccess') });
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, t('campaignCreatedError')) });
@@ -88,12 +115,71 @@ export default function BulkSender() {
     }
   };
 
+  const handleAttachmentChange = (event) => {
+    const files = [...(event.target.files || [])];
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+
+    if (imageFiles.length !== files.length) {
+      setNotice({ type: 'error', text: t('bulkImageOnly') });
+      event.target.value = '';
+      return;
+    }
+
+    setAttachments(current => [...current, ...imageFiles]);
+    event.target.value = '';
+  };
+
+  const removeAttachment = (index) => {
+    setAttachments(current => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
   const handleSendCampaign = async (campaignId) => {
     setLoading(true);
     try {
-      const { data } = await API.post(`/bulk-sender/campaign/${campaignId}/send`);
+      const campaign = campaigns.find(item => item.id === campaignId);
+      const recipients = getLocalRecipients();
+
+      const { data } = await API.post(`/bulk-sender/campaign/${campaignId}/send`, {
+        campaign,
+        recipients
+      });
+
+      // Create individual recipient records with status and timestamp
+      const recipientsWithStatus = recipients.map(recipient => ({
+        email: recipient.email,
+        name: recipient.name || recipient.email,
+        status: 'sent',
+        sentAt: new Date().toISOString()
+      }));
+
+      addLocalSendHistory({
+        id: `bulk-${campaignId}`,
+        source: 'bulk',
+        name: campaign.name,
+        subject: campaign.subject,
+        totalRecipients: data.totalRecipients,
+        sentCount: data.sentCount,
+        failedCount: data.failedCount,
+        recipients: recipientsWithStatus
+      });
       setNotice({ type: 'success', text: t('campaignSentSuccess', { count: data.sentCount }) });
-      fetchCampaigns();
+      setCampaigns(current => current.map(item => item.id === campaignId
+        ? {
+            ...item,
+            status: 'completed',
+            totalRecipients: data.totalRecipients,
+            sentCount: data.sentCount,
+            failedCount: data.failedCount
+          }
+        : item));
+      saveLocalCampaign({
+        ...campaign,
+        status: 'completed',
+        totalRecipients: data.totalRecipients,
+        sentCount: data.sentCount,
+        failedCount: data.failedCount,
+        completedAt: new Date().toISOString()
+      });
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, t('campaignSendError')) });
     } finally {
@@ -106,7 +192,12 @@ export default function BulkSender() {
 
     setLoading(true);
     try {
-      await API.delete(`/bulk-sender/campaign/${campaignId}`);
+      removeLocalCampaign(campaignId);
+      try {
+        await API.delete(`/bulk-sender/campaign/${campaignId}`);
+      } catch {
+        // The serverless copy may already be gone; the persistent local copy is removed.
+      }
       setCampaigns(campaigns.filter(c => c.id !== campaignId));
       setNotice({ type: 'success', text: t('campaignDeletedSuccess') });
     } catch (error) {
@@ -117,11 +208,22 @@ export default function BulkSender() {
   };
 
   const handleViewStats = async (campaignId) => {
+    const campaign = campaigns.find(item => String(item.id) === String(campaignId));
     try {
       const { data } = await API.get(`/bulk-sender/campaign/${campaignId}/stats`);
       setSelectedCampaign(data);
     } catch (error) {
-      setNotice({ type: 'error', text: getApiErrorMessage(error, t('statsLoadError')) });
+      if (campaign) {
+        const totalRecipients = Number(campaign.totalRecipients) || 0;
+        setSelectedCampaign({
+          campaign,
+          openRate: totalRecipients ? ((Number(campaign.openedCount || 0) / totalRecipients) * 100).toFixed(2) : 0,
+          clickRate: totalRecipients ? ((Number(campaign.clickedCount || 0) / totalRecipients) * 100).toFixed(2) : 0,
+          bounceRate: totalRecipients ? ((Number(campaign.failedCount || 0) / totalRecipients) * 100).toFixed(2) : 0
+        });
+      } else {
+        setNotice({ type: 'error', text: getApiErrorMessage(error, t('statsLoadError')) });
+      }
     }
   };
 
@@ -136,20 +238,19 @@ export default function BulkSender() {
         <Button
           variant="contained"
           startIcon={<Send size={18} />}
-          onClick={() => setOpenDialog(true)}
+        onClick={() => setOpenDialog(true)}
         >
           {t('newCampaignBtn')}
         </Button>
       </Box>
 
       {/* Campaigns List */}
-      <Paper sx={{ overflowX: 'auto' }}>
+      <Paper className="bulk-campaigns-table" sx={{ overflowX: 'auto' }}>
         {campaigns.length > 0 ? (
           <Table>
             <TableHead>
               <TableRow sx={{ backgroundColor: '#f3f4f6' }}>
                 <TableCell>{t('campaignNameHeader')}</TableCell>
-                <TableCell>{t('regionHeader2')}</TableCell>
                 <TableCell>{t('statusHeader')}</TableCell>
                 <TableCell align="right">{t('recipientsHeader')}</TableCell>
                 <TableCell align="right">{t('sentHeader')}</TableCell>
@@ -161,7 +262,6 @@ export default function BulkSender() {
               {campaigns.map((campaign) => (
                 <TableRow key={campaign.id} hover>
                   <TableCell>{campaign.name}</TableCell>
-                  <TableCell>{campaign.region || 'All'}</TableCell>
                   <TableCell>
                     <Typography variant="caption" sx={{
                       px: 1.5,
@@ -221,8 +321,72 @@ export default function BulkSender() {
         )}
       </Paper>
 
+      <Stack className="bulk-campaigns-mobile" spacing={2}>
+        {campaigns.length > 0 ? campaigns.map((campaign) => (
+          <Paper className="bulk-campaign-card" key={campaign.id}>
+            <Box className="bulk-card-header">
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h6" noWrap>{campaign.name}</Typography>
+                <Typography variant="body2" color="text.secondary">{campaign.subject}</Typography>
+              </Box>
+              <Typography variant="caption" className={`bulk-status bulk-status-${campaign.status}`}>
+                {campaign.status}
+              </Typography>
+            </Box>
+
+            <Box className="bulk-card-stats">
+              <Box>
+                <Typography variant="caption" color="text.secondary">{t('recipientsHeader')}</Typography>
+                <Typography fontWeight={700}>{campaign.totalRecipients}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">{t('sentHeader')}</Typography>
+                <Typography fontWeight={700}>{campaign.sentCount}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">{t('failedHeader')}</Typography>
+                <Typography fontWeight={700}>{campaign.failedCount}</Typography>
+              </Box>
+            </Box>
+
+            <Stack className="bulk-card-actions" spacing={1}>
+              <Button
+                variant="outlined"
+                startIcon={<BarChart3 size={16} />}
+                onClick={() => handleViewStats(campaign.id)}
+              >
+                {t('statsBtn')}
+              </Button>
+              {campaign.status === 'draft' && (
+                <Button
+                  variant="contained"
+                  startIcon={<Send size={16} />}
+                  onClick={() => handleSendCampaign(campaign.id)}
+                  disabled={loading}
+                >
+                  {t('sendBtn')}
+                </Button>
+              )}
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<Trash2 size={16} />}
+                onClick={() => handleDeleteCampaign(campaign.id)}
+                disabled={loading}
+              >
+                {t('deleteBtn')}
+              </Button>
+            </Stack>
+          </Paper>
+        )) : (
+          <Paper className="bulk-campaign-card">
+            <Typography color="text.secondary" textAlign="center">{t('noCampaigns')}</Typography>
+          </Paper>
+        )}
+      </Stack>
+
       {/* Create Campaign Dialog */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+      <Dialog className="responsive-dialog" open={openDialog} onClose={closeCreateDialog} maxWidth="sm" fullWidth>
         <DialogTitle>{t('createCampaignTitle')}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={2}>
@@ -238,19 +402,6 @@ export default function BulkSender() {
               onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
               fullWidth
             />
-            <FormControl fullWidth>
-              <InputLabel>{t('targetRegionLabel')}</InputLabel>
-              <Select
-                value={formData.region}
-                onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                label={t('targetRegionLabel')}
-              >
-                <MenuItem value="">{t('allRegions')}</MenuItem>
-                {regions.map((region) => (
-                  <MenuItem key={region} value={region}>{region}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
             <TextField
               label={t('htmlTemplateLabel')}
               value={formData.htmlTemplate}
@@ -260,10 +411,45 @@ export default function BulkSender() {
               fullWidth
               helperText={t('htmlTemplateHelper')}
             />
+            <Box>
+              <Button component="label" variant="outlined" startIcon={<ImagePlus size={18} />}>
+                {t('bulkAddImage')}
+                <input hidden type="file" accept="image/*" multiple onChange={handleAttachmentChange} />
+              </Button>
+              {attachments.length > 0 && (
+                <Stack spacing={1} sx={{ mt: 1.25 }}>
+                  {attachments.map((file, index) => (
+                    <Paper
+                      key={`${file.name}-${index}`}
+                      variant="outlined"
+                      sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, p: 1.25 }}
+                    >
+                      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0 }}>
+                        <Box
+                          component="img"
+                          src={URL.createObjectURL(file)}
+                          alt=""
+                          sx={{ width: 42, height: 42, objectFit: 'cover', borderRadius: 1 }}
+                        />
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography fontWeight={700} noWrap>{file.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </Typography>
+                        </Box>
+                      </Stack>
+                      <Button size="small" color="error" startIcon={<X size={15} />} onClick={() => removeAttachment(index)}>
+                        {t('deleteBtn')}
+                      </Button>
+                    </Paper>
+                  ))}
+                </Stack>
+              )}
+            </Box>
           </Stack>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>{t('cancelBtn')}</Button>
+        <DialogActions className="responsive-dialog-actions">
+          <Button onClick={closeCreateDialog}>{t('cancelBtn')}</Button>
           <Button
             variant="contained"
             onClick={handleCreateCampaign}
@@ -276,7 +462,7 @@ export default function BulkSender() {
 
       {/* Campaign Stats Modal */}
       {selectedCampaign && (
-        <Dialog open={!!selectedCampaign} onClose={() => setSelectedCampaign(null)} maxWidth="sm" fullWidth>
+        <Dialog className="responsive-dialog" open={!!selectedCampaign} onClose={() => setSelectedCampaign(null)} maxWidth="sm" fullWidth>
           <DialogTitle>{t('campaignStatsTitle')}</DialogTitle>
           <DialogContent sx={{ pt: 2 }}>
             <Stack spacing={3}>

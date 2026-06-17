@@ -1,6 +1,7 @@
 import logger from '../services/logger.js';
 import { Sequelize } from 'sequelize';
 import sqlite3 from 'sqlite3';
+import pg from 'pg';
 import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,13 +16,17 @@ if (process.env.NODE_ENV !== 'production') {
 } else {
   console.log(`[DATABASE] Production mode - using Vercel environment variables`);
 }
-const usePostgres = process.env.DATABASE_URL?.startsWith('postgres');
+const databaseUrl = process.env.DATABASE_URL
+  || process.env.NEON_DATABASE_URL
+  || process.env.NEON_POSTGRES_URL;
+const usePostgres = /^(postgres|postgresql):\/\//i.test(databaseUrl || '');
 const sqliteStorage = process.env.SQLITE_PATH
   || (process.env.VERCEL ? '/tmp/mailora.sqlite' : path.join(rootDir, 'mailora.sqlite'));
 
 const sequelize = usePostgres
-  ? new Sequelize(process.env.DATABASE_URL, {
+  ? new Sequelize(databaseUrl, {
       dialect: 'postgres',
+      dialectModule: pg,
       logging: false,
       dialectOptions: process.env.DATABASE_SSL === 'false'
         ? {}

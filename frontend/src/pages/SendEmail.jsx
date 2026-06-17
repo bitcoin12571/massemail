@@ -20,11 +20,14 @@ import { CheckCircle, Eye, File, Image, Paperclip, Search, Send, Sparkles, Users
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { EmailPreviewModalCompose } from '../components/EmailPreviewModalCompose.jsx';
+import { addLocalSendHistory } from '../utils/localHistory';
+import { getContactDisplayName, mergeContacts } from '../utils/localContacts';
 
 export default function SendEmail({ onOpenSettings }) {
   const { language, t } = useLanguage();
   const [contacts, setContacts] = useState([]);
   const [selected, setSelected] = useState([]);
+  const [selectedContactSnapshots, setSelectedContactSnapshots] = useState({});
   const [search, setSearch] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
@@ -47,23 +50,83 @@ export default function SendEmail({ onOpenSettings }) {
     const timeout = setTimeout(async () => {
       try {
         const { data } = await API.get('/contacts', { params: { search, limit: 500 } });
-        setContacts(data.contacts);
+        const query = search.trim().toLowerCase();
+        setContacts(mergeContacts(data.contacts).filter(contact =>
+          !query || contact.email.includes(query) || contact.name.toLowerCase().includes(query)
+        ));
       } catch {
-        setNotice({ type: 'error', text: t('loadRecipientsError') });
+        const query = search.trim().toLowerCase();
+        setContacts(mergeContacts().filter(contact =>
+          !query || contact.email.includes(query) || contact.name.toLowerCase().includes(query)
+        ));
       }
     }, 200);
-    return () => clearTimeout(timeout);
+    const handleContactsUpdate = () => {
+      const query = search.trim().toLowerCase();
+      setContacts(mergeContacts().filter(contact =>
+        !query || contact.email.includes(query) || contact.name.toLowerCase().includes(query)
+      ));
+    };
+    window.addEventListener('mailora:contacts-updated', handleContactsUpdate);
+    return () => {
+      clearTimeout(timeout);
+      window.removeEventListener('mailora:contacts-updated', handleContactsUpdate);
+    };
   }, [search]);
 
   const allSelected = contacts.length > 0 && contacts.every((contact) => selected.includes(contact.id));
   const selectedContacts = useMemo(
-    () => contacts.filter((contact) => selected.includes(contact.id)),
-    [contacts, selected]
+    () => selected
+      .map((id) => selectedContactSnapshots[id] || contacts.find((contact) => contact.id === id))
+      .filter(Boolean),
+    [contacts, selected, selectedContactSnapshots]
   );
 
-  const toggle = (id) => setSelected((current) => current.includes(id)
-    ? current.filter((contactId) => contactId !== id)
-    : [...current, id]);
+  useEffect(() => {
+    setSelectedContactSnapshots((current) => {
+      const next = { ...current };
+      contacts.forEach((contact) => {
+        if (selected.includes(contact.id)) next[contact.id] = contact;
+      });
+      return next;
+    });
+  }, [contacts, selected]);
+
+  const toggle = (contact) => {
+    setSelected((current) => {
+      const isSelected = current.includes(contact.id);
+      if (isSelected) {
+        setSelectedContactSnapshots((snapshots) => {
+          const next = { ...snapshots };
+          delete next[contact.id];
+          return next;
+        });
+        return current.filter((contactId) => contactId !== contact.id);
+      }
+
+      setSelectedContactSnapshots((snapshots) => ({ ...snapshots, [contact.id]: contact }));
+      return [...current, contact.id];
+    });
+  };
+
+  const toggleAllVisible = () => {
+    if (allSelected) {
+      const visibleIds = new Set(contacts.map((contact) => contact.id));
+      setSelected((current) => current.filter((id) => !visibleIds.has(id)));
+      setSelectedContactSnapshots((current) => {
+        const next = { ...current };
+        contacts.forEach((contact) => delete next[contact.id]);
+        return next;
+      });
+      return;
+    }
+
+    setSelected((current) => [...new Set([...current, ...contacts.map((contact) => contact.id)])]);
+    setSelectedContactSnapshots((current) => ({
+      ...current,
+      ...Object.fromEntries(contacts.map((contact) => [contact.id, contact]))
+    }));
+  };
 
   const addFiles = (event) => {
     const incoming = Array.from(event.target.files || []);
@@ -90,11 +153,28 @@ export default function SendEmail({ onOpenSettings }) {
     }
   };
 
+  const getRecipientDisplayName = (contact) => (
+    String(contact?.company || contact?.name || contact?.email || '').trim()
+  );
+
+  const buildRecipientHistoryName = (contacts = []) => {
+    const names = contacts.map(getRecipientDisplayName).filter(Boolean);
+    if (!names.length) return subject || 'Direct email';
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]}, ${names[1]}`;
+    return `${names[0]}, ${names[1]} + încă ${names.length - 2}`;
+  };
+
   const send = async () => {
+    if (selectedContacts.length !== selected.length) {
+      setNotice({ type: 'error', text: 'Lista de destinatari nu este încă sincronizată. Reîncearcă peste o secundă.' });
+      return;
+    }
+
     setSending(true);
     try {
       const data = new FormData();
-      data.append('contactIds', JSON.stringify(selected));
+      data.append('contactIds', JSON.stringify(selectedContacts.map(({ id }) => id)));
       data.append('recipients', JSON.stringify(selectedContacts.map(({ id, email, name, status }) => ({
         id,
         email,
@@ -113,14 +193,35 @@ export default function SendEmail({ onOpenSettings }) {
         success: true,
         sentCount: response.data.sentCount,
         recipientCount: response.data.recipientCount,
+        failedCount: response.data.failedCount || 0,
         subject: subject,
         filesCount: files.length,
         campaignId: response.data.campaignId
+      });
+
+      // Create individual recipient records with status and timestamp
+      const recipientsWithStatus = selectedContacts.map(contact => ({
+        email: contact.email,
+        name: contact.name || contact.email,
+        status: response.data.successfulRecipients?.includes(contact.id) ? 'sent' : 'failed',
+        sentAt: new Date().toISOString()
+      }));
+
+      addLocalSendHistory({
+        id: response.data.campaignId || `direct-${Date.now()}`,
+        source: 'direct',
+        name: response.data.campaignName || buildRecipientHistoryName(selectedContacts),
+        subject,
+        totalRecipients: response.data.recipientCount,
+        sentCount: response.data.sentCount,
+        failedCount: response.data.failedCount || Math.max(0, response.data.recipientCount - response.data.sentCount),
+        recipients: recipientsWithStatus
       });
       setResultOpen(true);
 
       // Clear form
       setSelected([]);
+      setSelectedContactSnapshots({});
       setSubject('');
       setMessage('');
       setFiles([]);
@@ -151,7 +252,7 @@ export default function SendEmail({ onOpenSettings }) {
             <Checkbox
               checked={allSelected}
               indeterminate={selected.length > 0 && !allSelected}
-              onChange={() => setSelected(allSelected ? [] : contacts.map((contact) => contact.id))}
+              onChange={toggleAllVisible}
             />
           </Box>
           <Box className="recipient-search">
@@ -166,11 +267,11 @@ export default function SendEmail({ onOpenSettings }) {
           </Box>
           <Box className="recipient-list">
             {contacts.length ? contacts.map((contact) => (
-              <Box className={`recipient-option ${selected.includes(contact.id) ? 'selected' : ''}`} key={contact.id} onClick={() => toggle(contact.id)}>
-                <Checkbox checked={selected.includes(contact.id)} onClick={(event) => event.stopPropagation()} onChange={() => toggle(contact.id)} />
-                <Avatar>{(contact.name || contact.email)[0].toUpperCase()}</Avatar>
+              <Box className={`recipient-option ${selected.includes(contact.id) ? 'selected' : ''}`} key={contact.id} onClick={() => toggle(contact)}>
+                <Checkbox checked={selected.includes(contact.id)} onClick={(event) => event.stopPropagation()} onChange={() => toggle(contact)} />
+                <Avatar>{getContactDisplayName(contact)[0].toUpperCase()}</Avatar>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography fontWeight={700} noWrap>{contact.name || contact.email}</Typography>
+                  <Typography fontWeight={700} noWrap>{getContactDisplayName(contact)}</Typography>
                   <Typography variant="body2" color="text.secondary" noWrap>{contact.email}</Typography>
                 </Box>
               </Box>
@@ -288,10 +389,10 @@ export default function SendEmail({ onOpenSettings }) {
       </Snackbar>
 
       {/* Send Success Result Modal */}
-      <Dialog open={resultOpen} onClose={() => setResultOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog className="responsive-dialog send-result-dialog" open={resultOpen} onClose={() => setResultOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}>
           <CheckCircle size={24} style={{ color: '#10b981' }} />
-          <Typography variant="h6">Emails Sent Successfully!</Typography>
+          <Typography variant="h6">{t('sendSuccessTitle') || 'Emails sent successfully'}</Typography>
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {sendResult && (
@@ -307,40 +408,38 @@ export default function SendEmail({ onOpenSettings }) {
                 <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
                   {sendResult.sentCount} / {sendResult.recipientCount}
                 </Typography>
-                <Typography variant="body2">Emails queued for delivery</Typography>
+                <Typography variant="body2">{t('sendSuccessQueued') || 'Emails queued for delivery'}</Typography>
               </Box>
 
-              {/* Details Grid */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>
+              <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1, minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary">{t('subject')}</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5, overflowWrap: 'anywhere' }}>
+                  {sendResult.subject || '(No subject)'}
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
                 <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1 }}>
-                  <Typography variant="caption" color="text.secondary">Subject</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }} noWrap>
-                    {sendResult.subject || '(No subject)'}
-                  </Typography>
-                </Box>
-                <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1 }}>
-                  <Typography variant="caption" color="text.secondary">Attachments</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('attachments')}</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
                     {sendResult.filesCount} {sendResult.filesCount === 1 ? 'file' : 'files'}
                   </Typography>
                 </Box>
-              </Box>
-
-              {/* Campaign ID */}
-              <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1 }}>
-                <Typography variant="caption" color="text.secondary">Campaign ID</Typography>
-                <Typography
-                  variant="body2"
-                  sx={{ fontWeight: 600, mt: 0.5, fontFamily: 'monospace', wordBreak: 'break-all' }}
-                >
-                  {sendResult.campaignId}
-                </Typography>
+                <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1, minWidth: 0 }}>
+                  <Typography variant="caption" color="text.secondary">Campaign ID</Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 600, mt: 0.5, fontFamily: 'monospace', overflowWrap: 'anywhere' }}
+                  >
+                    {sendResult.campaignId}
+                  </Typography>
+                </Box>
               </Box>
 
               {/* Info */}
               <Alert severity="info" sx={{ border: 'none', background: '#cffafe', color: '#164e63' }}>
                 <Typography variant="body2">
-                  Emails will be delivered within the next few minutes. Check the Delivery Status page to monitor progress.
+                  {t('sendSuccessHelp') || 'Emails will be delivered within the next few minutes. Check the Delivery Status page to monitor progress.'}
                 </Typography>
               </Alert>
 
@@ -352,7 +451,7 @@ export default function SendEmail({ onOpenSettings }) {
                   onClick={() => setResultOpen(false)}
                   sx={{ background: '#7c3aed' }}
                 >
-                  Done
+                  {t('done') || 'Done'}
                 </Button>
               </Box>
             </Box>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Box, Typography, Stack } from '@mui/material';
 import { slideUp, containerVariants } from '../utils/animations';
 
@@ -31,14 +31,13 @@ export default function QueueVisualization({ stats }) {
       style={{ width: '100%', height: '100%' }}
     >
       <Stack spacing={3} alignItems="center" justifyContent="center" sx={{ height: '100%', p: 3 }}>
-        {/* Animated Pie Chart */}
         <motion.div
+          className="queue-chart-wrap"
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          style={{ width: '100%', height: 250 }}
         >
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={data}
@@ -64,43 +63,19 @@ export default function QueueVisualization({ stats }) {
                   boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                 }}
               />
-              <Legend
-                verticalAlign="bottom"
-                height={36}
-                wrapperStyle={{
-                  paddingTop: '16px'
-                }}
-              />
             </PieChart>
           </ResponsiveContainer>
-        </motion.div>
 
-        {/* Center Progress Display */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.6 }}
-          style={{
-            position: 'absolute',
-            textAlign: 'center',
-            zIndex: 10
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: '28px',
-              fontWeight: 800,
-              background: `linear-gradient(135deg, #10b981, #059669)`,
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}
-          >
-            {progress}%
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-            Complete
-          </Typography>
+          <Box className="queue-chart-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4, delay: 0.6 }}
+            >
+              <Typography className="queue-chart-percent">{progress}%</Typography>
+              <Typography variant="caption" color="text.secondary">Finalizat</Typography>
+            </motion.div>
+          </Box>
         </motion.div>
 
         {/* Stats Grid */}

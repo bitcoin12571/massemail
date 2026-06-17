@@ -3,6 +3,7 @@ import BulkCampaign from '../models/BulkCampaign.js';
 import BulkCampaignSend from '../models/BulkCampaignSend.js';
 import ParsedEmail from '../models/ParsedEmail.js';
 import { v4 as uuidv4 } from 'uuid';
+import { isReservedTestEmail } from './chisinauTestDataService.js';
 
 export async function createBulkCampaign(data) {
   try {
@@ -64,7 +65,7 @@ export async function sendBulkCampaign(campaignId, emailIds = null) {
     await BulkCampaignSend.bulkCreate(sendRecords);
 
     // Send emails (batch process)
-    const batchSize = 50;
+    const batchSize = 100;
     let sentCount = 0;
     let failedCount = 0;
 
@@ -82,7 +83,8 @@ export async function sendBulkCampaign(campaignId, emailIds = null) {
           await sendEmail({
             to: email.email,
             subject: campaign.subject,
-            html: personalizedHtml
+            html: personalizedHtml,
+            attachments: Array.isArray(campaign.attachments) ? campaign.attachments : []
           });
 
           const sendRecord = await BulkCampaignSend.findOne({
@@ -131,6 +133,64 @@ export async function sendBulkCampaign(campaignId, emailIds = null) {
   } catch (error) {
     throw new Error(`Failed to send bulk campaign: ${error.message}`);
   }
+}
+
+export async function sendBulkCampaignDirect(campaign, recipients) {
+  const testRecipientCount = recipients.filter(recipient => isReservedTestEmail(recipient?.email)).length;
+  if (testRecipientCount > 0) {
+    throw new Error(
+      `${testRecipientCount} adrese sunt date de test și nu pot fi folosite pentru trimitere reală.`
+    );
+  }
+
+  const uniqueRecipients = [...new Map(
+    recipients
+      .filter(recipient => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient?.email || ''))
+      .map(recipient => [recipient.email.toLowerCase(), {
+        email: recipient.email.toLowerCase(),
+        name: recipient.name || '',
+        region: recipient.region || 'unknown'
+      }])
+  ).values()];
+
+  if (!campaign?.subject || !campaign?.htmlTemplate) {
+    throw new Error('Campaign subject and template are required');
+  }
+
+  if (uniqueRecipients.length === 0) {
+    throw new Error('No valid emails found for this campaign');
+  }
+
+  let sentCount = 0;
+  let failedCount = 0;
+
+  const batchSize = 100;
+  for (let index = 0; index < uniqueRecipients.length; index += batchSize) {
+    const batch = uniqueRecipients.slice(index, index + batchSize);
+    const results = await Promise.allSettled(batch.map(recipient => {
+      const personalizedHtml = campaign.htmlTemplate
+        .replace(/{{name}}/g, recipient.name || recipient.email)
+        .replace(/{{email}}/g, recipient.email)
+        .replace(/{{region}}/g, recipient.region);
+
+      return sendEmail({
+        to: recipient.email,
+        subject: campaign.subject,
+        html: personalizedHtml,
+        attachments: Array.isArray(campaign.attachments) ? campaign.attachments : []
+      });
+    }));
+
+    sentCount += results.filter(result => result.status === 'fulfilled').length;
+    failedCount += results.filter(result => result.status === 'rejected').length;
+  }
+
+  return {
+    totalRecipients: uniqueRecipients.length,
+    sentCount,
+    failedCount,
+    successRate: `${((sentCount / uniqueRecipients.length) * 100).toFixed(2)}%`
+  };
 }
 
 export async function getCampaignStats(campaignId) {

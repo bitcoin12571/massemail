@@ -49,8 +49,7 @@ const Contact = sequelize.define('Contact', {
   timestamps: true,
   indexes: [
     { fields: ['email'] },
-    { fields: ['status'] },
-    { fields: ['tags'] }
+    { fields: ['status'] }
   ]
 });
 

@@ -1,14 +1,66 @@
 import express from 'express';
 import { parseCSV, parsePlainText, parseJSON, saveParsedEmails, getEmailsByRegion, getAllRegions, getRegionStats, validateAndFixEmails, deleteByRegion, syncParsedEmailsToContacts } from '../services/emailParserService.js';
+import { discoverRegionalEmails } from '../services/regionalDiscoveryService.js';
 import logger from '../services/logger.js';
 
 const router = express.Router();
+
+router.post('/discover-region', async (req, res) => {
+  try {
+    const { region, category = 'all', offset = 0 } = req.body ?? {};
+    const normalizedRegion = String(region || '').trim();
+
+    if (normalizedRegion.length < 3 || normalizedRegion.length > 120) {
+      return res.status(400).json({ error: 'Introdu o regiune validă' });
+    }
+
+    const result = await discoverRegionalEmails({
+      region: normalizedRegion,
+      category: String(category || 'all'),
+      offset
+    });
+
+    const verifiedContacts = result.contacts.filter(contact =>
+      contact.verified && contact.emailDomainValid
+    );
+
+    if (verifiedContacts.length > 0) {
+      const parsedEmails = verifiedContacts.map(contact => ({
+        email: contact.email,
+        name: contact.name,
+        region: normalizedRegion.toLowerCase(),
+        source: 'web_scrape',
+        isValid: true,
+        notes: JSON.stringify({
+          verifiedUrl: contact.verifiedUrl,
+          verificationLevel: contact.verificationLevel,
+          emailDomainMethod: contact.emailDomainMethod
+        })
+      }));
+
+      try {
+        await saveParsedEmails(parsedEmails);
+      } catch (saveError) {
+        logger.warn('REGIONAL_DISCOVERY', `Database save skipped: ${saveError.message}`);
+      }
+    }
+
+    logger.info(
+      'REGIONAL_DISCOVERY',
+      `${normalizedRegion}: ${result.contacts.length} emails from ${result.businessesScanned} businesses`
+    );
+    res.json({ success: true, ...result, contacts: verifiedContacts });
+  } catch (error) {
+    logger.error('REGIONAL_DISCOVERY', 'Discovery failed', error);
+    res.status(502).json({ error: error.message || 'Căutarea regională a eșuat' });
+  }
+});
 
 // Upload and parse (auto-detect format: CSV, Plain Text, or JSON)
 // Optimized for large-scale bulk imports
 router.post('/upload-csv', async (req, res) => {
   try {
-    const { csvContent, format } = req.body;
+    const { csvContent, format } = req.body ?? {};
 
     if (!csvContent) {
       return res.status(400).json({ error: 'Content required' });
@@ -22,18 +74,21 @@ router.post('/upload-csv', async (req, res) => {
     }
 
     let results, errors, totalProcessed;
-    let detectedFormat = format || 'csv'; // default to CSV
+    let detectedFormat = String(format || '').toLowerCase() || 'csv'; // default to CSV
+
+    if (!['csv', 'plaintext', 'json'].includes(detectedFormat)) {
+      return res.status(400).json({ error: 'Format must be csv, plaintext, or json' });
+    }
 
     // Auto-detect format if not specified
     if (!format) {
       const trimmed = csvContent.trim();
       if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
         detectedFormat = 'json';
-      } else if (!trimmed.includes(',') || trimmed.split('\n').length <= 2) {
-        // Heuristic: if no commas or very few lines, likely plain text
+      } else if (!trimmed.includes(',') && !trimmed.includes(';')) {
+        // No delimiters means one email per line.
         const lines = trimmed.split('\n').filter(l => l.trim());
-        const hasCommas = lines.some(l => l.includes(','));
-        if (!hasCommas && lines.length > 0) {
+        if (lines.length > 0) {
           detectedFormat = 'plaintext';
         }
       }
@@ -106,6 +161,7 @@ router.post('/upload-csv', async (req, res) => {
       totalProcessed,
       validEmails: saved.length,
       format: detectedFormat,
+      recipients: results.map(({ email, name, region }) => ({ email, name, region })),
       errors: errors.length > 0 ? errors.slice(0, 20) : [], // Return first 20 errors only
       errorCount: errors.length,
       ...(shouldReturnDetails && {

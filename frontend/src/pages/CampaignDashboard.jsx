@@ -20,13 +20,13 @@ import {
   Typography
 } from '@mui/material';
 import {
-  ArrowUpRight,
   CalendarDays,
   ChevronDown,
   Clock3,
   MailCheck,
   MoreHorizontal,
   MousePointerClick,
+  BarChart3,
   Trash2,
   Plus,
   Send,
@@ -37,6 +37,7 @@ import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import AnimatedStatCard from '../components/AnimatedStatCard';
 import { containerVariants } from '../utils/animations';
+import { getLocalSendHistory, removeLocalSendHistory } from '../utils/localHistory';
 
 export default function CampaignDashboard({ onOpenDatabase }) {
   const { t } = useLanguage();
@@ -49,6 +50,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
   const [sendContacts, setSendContacts] = useState([]);
   const [selectedContactIds, setSelectedContactIds] = useState([]);
   const [notice, setNotice] = useState(null);
+  const [selectedStats, setSelectedStats] = useState(null);
   const [period, setPeriod] = useState('30');
   const [periodAnchor, setPeriodAnchor] = useState(null);
   const [formData, setFormData] = useState({
@@ -60,26 +62,110 @@ export default function CampaignDashboard({ onOpenDatabase }) {
 
   useEffect(() => {
     refresh();
+    const handleHistoryUpdate = () => refresh();
+    window.addEventListener('mailora:history-updated', handleHistoryUpdate);
+    return () => window.removeEventListener('mailora:history-updated', handleHistoryUpdate);
   }, [period]);
 
   const refresh = () => Promise.all([fetchCampaigns(), fetchOverview()]);
 
   const fetchCampaigns = async () => {
+    const localCampaigns = filterLocalHistory(getLocalSendHistory());
     try {
       const response = await API.get('/campaigns', { params: { days: period } });
-      setCampaigns(response.data);
+      const serverCampaigns = response.data.map(campaign => normalizeCampaign(campaign, 'server'));
+      setCampaigns(mergeCampaignHistory(localCampaigns.map(campaign => normalizeCampaign(campaign)), serverCampaigns));
     } catch (error) {
       console.error('Error fetching campaigns:', error);
+      setCampaigns(localCampaigns.map(campaign => normalizeCampaign(campaign)));
     }
   };
 
   const fetchOverview = async () => {
+    const localCampaigns = filterLocalHistory(getLocalSendHistory());
+    const localSent = localCampaigns.reduce((sum, campaign) => sum + campaign.sentCount, 0);
+    const localFailed = localCampaigns.reduce((sum, campaign) => sum + campaign.failedCount, 0);
+    const localTotal = localSent + localFailed;
     try {
       const response = await API.get('/campaigns/overview', { params: { days: period } });
-      setOverview(response.data);
+      setOverview({
+        ...response.data,
+        sent: response.data.sent + localSent,
+        failed: localFailed,
+        successRate: localTotal ? Math.round((localSent / localTotal) * 100) : 0
+      });
     } catch (error) {
       console.error('Error fetching overview:', error);
+      setOverview({
+        contacts: 0,
+        sent: localSent,
+        failed: localFailed,
+        successRate: localTotal ? Math.round((localSent / localTotal) * 100) : 0
+      });
     }
+  };
+
+  const filterLocalHistory = (history) => {
+    const days = Number(period);
+    if (!days) return history;
+    const threshold = Date.now() - days * 24 * 60 * 60 * 1000;
+    return history.filter(entry => new Date(entry.sentAt || entry.createdAt).getTime() >= threshold);
+  };
+
+  const getNumber = (...values) => {
+    const value = values.find((candidate) => Number.isFinite(Number(candidate)) && Number(candidate) > 0);
+    return Number(value) || 0;
+  };
+
+  const normalizeCampaign = (campaign, source = campaign.source || 'local') => {
+    const sentCount = getNumber(campaign.sentCount, campaign.sent, campaign.emailCount);
+    const failedCount = getNumber(campaign.failedCount, campaign.failed);
+    const pendingCount = getNumber(campaign.pendingCount, campaign.pending);
+    const totalRecipients = getNumber(
+      campaign.totalRecipients,
+      campaign.recipientCount,
+      campaign.emailCount,
+      sentCount + failedCount + pendingCount
+    );
+
+    return {
+      ...campaign,
+      source,
+      totalRecipients,
+      sentCount,
+      failedCount,
+      pendingCount,
+      openedCount: getNumber(campaign.openedCount, campaign.opened),
+      clickedCount: getNumber(campaign.clickedCount, campaign.clicked),
+      status: campaign.status || (failedCount ? 'completed_with_errors' : 'completed')
+    };
+  };
+
+  const mergeCampaignHistory = (...groups) => {
+    const merged = new Map();
+
+    groups.flat().forEach((campaign) => {
+      const existing = merged.get(campaign.id);
+      if (!existing) {
+        merged.set(campaign.id, campaign);
+        return;
+      }
+
+      merged.set(campaign.id, {
+        ...existing,
+        ...campaign,
+        totalRecipients: Math.max(existing.totalRecipients || 0, campaign.totalRecipients || 0),
+        sentCount: Math.max(existing.sentCount || 0, campaign.sentCount || 0),
+        failedCount: Math.max(existing.failedCount || 0, campaign.failedCount || 0),
+        pendingCount: Math.max(existing.pendingCount || 0, campaign.pendingCount || 0),
+        openedCount: Math.max(existing.openedCount || 0, campaign.openedCount || 0),
+        clickedCount: Math.max(existing.clickedCount || 0, campaign.clickedCount || 0),
+        source: campaign.source === 'server' ? 'server' : existing.source
+      });
+    });
+
+    return [...merged.values()]
+      .sort((left, right) => new Date(right.sentAt || right.createdAt) - new Date(left.sentAt || left.createdAt));
   };
 
   const handleCreateCampaign = async () => {
@@ -129,6 +215,11 @@ export default function CampaignDashboard({ onOpenDatabase }) {
 
   const deleteCampaign = async (campaign) => {
     if (!window.confirm(`Delete "${campaign.name}"?`)) return;
+    if (campaign.source !== 'server') {
+      removeLocalSendHistory(campaign.id);
+      refresh();
+      return;
+    }
     setLoading(true);
     try {
       await API.delete(`/campaigns/${campaign.id}`);
@@ -142,10 +233,10 @@ export default function CampaignDashboard({ onOpenDatabase }) {
   };
 
   const statCards = [
-    { label: 'Database records', value: overview.contacts, change: 'Active email addresses', icon: UsersRound, tone: 'violet' },
-    { label: 'Emails processed', value: overview.sent, change: 'All time', icon: Send, tone: 'blue' },
-    { label: 'Delivered', value: `${overview.openRate}%`, change: 'Provider events', icon: MailCheck, tone: 'green' },
-    { label: 'Tracked responses', value: `${overview.clickRate}%`, change: 'Available events', icon: MousePointerClick, tone: 'orange' }
+    { label: 'Campanii', value: campaigns.length, change: 'În perioada selectată', icon: UsersRound, tone: 'violet' },
+    { label: 'Emailuri trimise', value: overview.sent || 0, change: 'Livrări reușite', icon: Send, tone: 'blue' },
+    { label: 'Rată de succes', value: `${overview.successRate ?? overview.openRate ?? 0}%`, change: 'Trimise fără eroare', icon: MailCheck, tone: 'green' },
+    { label: 'Emailuri eșuate', value: overview.failed || 0, change: 'Necesită verificare', icon: MousePointerClick, tone: 'orange' }
   ];
   const periods = [
     { value: '7', label: t('last7') },
@@ -226,7 +317,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
               <Typography variant="h6">{t('recentSends')}</Typography>
               <Typography variant="body2" color="text.secondary">{t('staffMessages')}</Typography>
             </Box>
-            <Button variant="text" endIcon={<ArrowUpRight size={16} />}>View all</Button>
+            <Typography variant="body2" color="text.secondary">{campaigns.length} campanii</Typography>
           </Box>
 
           {campaigns.length === 0 ? (
@@ -250,19 +341,57 @@ export default function CampaignDashboard({ onOpenDatabase }) {
           ) : (
             <Stack className="campaign-list">
               {campaigns.map((campaign) => (
-                <Box className="campaign-row" key={campaign.id}>
-                  <Box className="campaign-avatar"><Send size={18} /></Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Typography fontWeight={750}>{campaign.name}</Typography>
-                    <Typography variant="body2" color="text.secondary">{campaign.subject}</Typography>
-                  </Box>
-                  <Chip label={campaign.status} size="small" />
-                  {campaign.status === 'draft' && (
-                    <Button size="small" variant="contained" startIcon={<Send size={15} />} disabled={loading} onClick={() => openSendDialog(campaign)}>
-                      Send
+                <Box key={campaign.id}>
+                  {/* Campaign Header */}
+                  <Box className="campaign-row">
+                    <Box className="campaign-avatar"><Send size={18} /></Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography fontWeight={750}>{campaign.name}</Typography>
+                      <Typography variant="body2" color="text.secondary">{campaign.subject}</Typography>
+                    </Box>
+                    <Chip label={campaign.status} size="small" />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<BarChart3 size={15} />}
+                      onClick={() => setSelectedStats(campaign)}
+                    >
+                      Statistici
                     </Button>
+                    {campaign.status === 'draft' && (
+                      <Button size="small" variant="contained" startIcon={<Send size={15} />} disabled={loading} onClick={() => openSendDialog(campaign)}>
+                        Send
+                      </Button>
+                    )}
+                    <IconButton color="error" onClick={() => deleteCampaign(campaign)}><Trash2 size={17} /></IconButton>
+                  </Box>
+
+                  {/* Individual Recipients List */}
+                  {campaign.recipients && campaign.recipients.length > 0 && (
+                    <Box sx={{ pl: 5, pt: 1, pb: 2, borderLeft: '2px solid #e5e7eb' }}>
+                      {campaign.recipients.slice(0, 5).map((recipient, idx) => (
+                        <Box key={idx} sx={{ py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ flex: 1 }}>
+                            <strong>{recipient.email}</strong>
+                          </Typography>
+                          <Chip
+                            label={recipient.status === 'sent' ? '✅ Trimis' : '❌ Eșuat'}
+                            size="small"
+                            variant="outlined"
+                            sx={{ color: recipient.status === 'sent' ? '#10b981' : '#ef4444' }}
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(recipient.sentAt).toLocaleTimeString()}
+                          </Typography>
+                        </Box>
+                      ))}
+                      {campaign.recipients.length > 5 && (
+                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: '#6b7280' }}>
+                          ... și {campaign.recipients.length - 5} alte emails
+                        </Typography>
+                      )}
+                    </Box>
                   )}
-                  <IconButton color="error" onClick={() => deleteCampaign(campaign)}><Trash2 size={17} /></IconButton>
                 </Box>
               ))}
             </Stack>
@@ -291,6 +420,37 @@ export default function CampaignDashboard({ onOpenDatabase }) {
           <Button fullWidth variant="outlined" onClick={onOpenDatabase}>{t('openDatabase')}</Button>
         </Paper>
       </Box>
+
+      <Dialog className="responsive-dialog" open={Boolean(selectedStats)} onClose={() => setSelectedStats(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Typography variant="h5" fontWeight={800}>Statistici campanie</Typography>
+          <Typography variant="body2" color="text.secondary">{selectedStats?.name}</Typography>
+        </DialogTitle>
+        <DialogContent>
+          {selectedStats && (
+            <Box className="history-stats-grid">
+              <Box><Typography variant="caption">Destinatari</Typography><strong>{selectedStats.totalRecipients || 0}</strong></Box>
+              <Box><Typography variant="caption">Trimise</Typography><strong>{selectedStats.sentCount || 0}</strong></Box>
+              <Box><Typography variant="caption">Eșuate</Typography><strong>{selectedStats.failedCount || 0}</strong></Box>
+              <Box>
+                <Typography variant="caption">Rată succes</Typography>
+                <strong>{selectedStats.totalRecipients ? Math.round(((selectedStats.sentCount || 0) / selectedStats.totalRecipients) * 100) : 0}%</strong>
+              </Box>
+              <Box className="history-stats-wide">
+                <Typography variant="caption">Subiect</Typography>
+                <strong>{selectedStats.subject || '-'}</strong>
+              </Box>
+              <Box className="history-stats-wide">
+                <Typography variant="caption">Data trimiterii</Typography>
+                <strong>{new Date(selectedStats.sentAt || selectedStats.createdAt).toLocaleString()}</strong>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions className="responsive-dialog-actions">
+          <Button variant="contained" onClick={() => setSelectedStats(null)}>Închide</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>

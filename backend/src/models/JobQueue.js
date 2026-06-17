@@ -8,7 +8,7 @@ const JobQueue = sequelize.define('JobQueue', {
     autoIncrement: true
   },
   emailId: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID,
     allowNull: false,
     references: {
       model: 'Emails',
@@ -16,7 +16,7 @@ const JobQueue = sequelize.define('JobQueue', {
     }
   },
   campaignId: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID,
     allowNull: false,
     references: {
       model: 'Campaigns',
@@ -24,7 +24,7 @@ const JobQueue = sequelize.define('JobQueue', {
     }
   },
   contactId: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID,
     allowNull: false,
     references: {
       model: 'Contacts',
