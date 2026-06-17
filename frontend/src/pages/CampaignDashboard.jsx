@@ -478,7 +478,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
           {selectedStats && (
             <Stack spacing={2.5}>
               {/* Top 4 Stats Grid */}
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3.5 }}>
                 {/* Destinatari */}
                 <Box sx={{
                   p: 2,
