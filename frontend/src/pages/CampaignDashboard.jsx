@@ -474,7 +474,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
           <Typography variant="h5" fontWeight={900} sx={{ mb: 0.5 }}>📊 Statistici Campanie</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>{selectedStats?.name}</Typography>
         </DialogTitle>
-        <DialogContent sx={{ pt: 5.5, pb: 3, px: 4 }}>
+        <DialogContent sx={{ pt: 3, pb: 3, px: 2 }}>
           {selectedStats && (
             <Stack spacing={2.5}>
               {/* Top 4 Stats Grid */}
