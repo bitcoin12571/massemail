@@ -200,10 +200,12 @@ export default function SendEmail({ onOpenSettings }) {
       });
 
       // Create individual recipient records with status and timestamp
+      // Dacă API returnează sentCount = recipientCount, toți au fost trimși
+      const allSuccessful = response.data.sentCount === response.data.recipientCount;
       const recipientsWithStatus = selectedContacts.map(contact => ({
         email: contact.email,
         name: contact.name || contact.email,
-        status: response.data.successfulRecipients?.includes(contact.id) ? 'sent' : 'failed',
+        status: allSuccessful ? 'sent' : 'failed',
         sentAt: new Date().toISOString()
       }));
 
