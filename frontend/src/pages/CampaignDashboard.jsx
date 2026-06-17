@@ -368,27 +368,74 @@ export default function CampaignDashboard({ onOpenDatabase }) {
 
                   {/* Individual Recipients List */}
                   {campaign.recipients && campaign.recipients.length > 0 && (
-                    <Box sx={{ pl: 5, pt: 1, pb: 2, borderLeft: '2px solid #e5e7eb' }}>
-                      {campaign.recipients.slice(0, 5).map((recipient, idx) => (
-                        <Box key={idx} sx={{ py: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="body2" sx={{ flex: 1 }}>
-                            <strong>{recipient.email}</strong>
-                          </Typography>
-                          <Chip
-                            label={recipient.status === 'sent' ? '✅ Trimis' : '❌ Eșuat'}
-                            size="small"
-                            variant="outlined"
-                            sx={{ color: recipient.status === 'sent' ? '#10b981' : '#ef4444' }}
-                          />
-                          <Typography variant="caption" color="text.secondary">
-                            {new Date(recipient.sentAt).toLocaleTimeString()}
+                    <Box sx={{
+                      pl: 5,
+                      pt: 2,
+                      pb: 2,
+                      borderLeft: '3px solid #7c3aed',
+                      backgroundColor: '#f9f5ff'
+                    }}>
+                      {campaign.recipients.slice(0, 5).map((recipient, idx) => {
+                        const sentDate = new Date(recipient.sentAt);
+                        const dateStr = sentDate.toLocaleDateString('ro-RO', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        });
+                        const timeStr = sentDate.toLocaleTimeString('ro-RO', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit'
+                        });
+
+                        return (
+                          <Box
+                            key={idx}
+                            sx={{
+                              py: 1.5,
+                              px: 2,
+                              mb: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 2,
+                              backgroundColor: 'white',
+                              borderRadius: 1,
+                              border: '1px solid #e5e7eb',
+                              '&:hover': { backgroundColor: '#fafafa' }
+                            }}
+                          >
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: '#1f2937' }}>
+                                {recipient.email}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: '#6b7280', mt: 0.5, display: 'block' }}>
+                                📅 {dateStr} • 🕐 {timeStr}
+                              </Typography>
+                            </Box>
+                            <Chip
+                              label={recipient.status === 'sent' ? '✅ Trimis cu succes' : '❌ Eșuat'}
+                              size="small"
+                              sx={{
+                                backgroundColor: recipient.status === 'sent' ? '#d1fae5' : '#fee2e2',
+                                color: recipient.status === 'sent' ? '#065f46' : '#991b1b',
+                                fontWeight: 600,
+                                minWidth: 'max-content'
+                              }}
+                            />
+                          </Box>
+                        );
+                      })}
+                      {campaign.recipients.length > 5 && (
+                        <Box sx={{
+                          mt: 1.5,
+                          pt: 1.5,
+                          borderTop: '1px solid #e5e7eb',
+                          pl: 2
+                        }}>
+                          <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 500 }}>
+                            ➕ {campaign.recipients.length - 5} alte emailuri trimise
                           </Typography>
                         </Box>
-                      ))}
-                      {campaign.recipients.length > 5 && (
-                        <Typography variant="caption" sx={{ mt: 1, display: 'block', color: '#6b7280' }}>
-                          ... și {campaign.recipients.length - 5} alte emails
-                        </Typography>
                       )}
                     </Box>
                   )}
