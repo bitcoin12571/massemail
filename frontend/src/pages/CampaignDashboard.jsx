@@ -470,7 +470,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
       </Box>
 
       <Dialog className="responsive-dialog" open={Boolean(selectedStats)} onClose={() => setSelectedStats(null)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', color: 'white', pb: 3 }}>
+        <DialogTitle sx={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', color: 'white', pb: 3, borderBottom: 'none' }}>
           <Typography variant="h5" fontWeight={900} sx={{ mb: 0.5 }}>📊 Statistici Campanie</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>{selectedStats?.name}</Typography>
         </DialogTitle>
