@@ -693,6 +693,14 @@ button:active:not(:disabled) {
   box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3) !important;
 }
 
+.MuiButton-contained.Mui-disabled {
+  color: #9ca3af !important;
+  background: #e5e7eb !important;
+  box-shadow: none !important;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
 .MuiButton-contained:hover:not(:disabled) {
   background: var(--primary-dark) !important;
   box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4) !important;
@@ -701,6 +709,14 @@ button:active:not(:disabled) {
 .MuiButton-outlined {
   border-color: var(--border-color) !important;
   color: var(--text-primary) !important;
+}
+
+.MuiButton-outlined.Mui-disabled {
+  color: #9ca3af !important;
+  border-color: #e5e7eb !important;
+  background: #f9fafb !important;
+  cursor: not-allowed;
+  transform: none !important;
 }
 
 .MuiButton-outlined:hover:not(:disabled) {
