@@ -27,6 +27,7 @@ import {
   webhookLimiter,
   uploadLimiter
 } from './middleware/rateLimit.js';
+import { initializeSentry, createSentryErrorHandler } from './middleware/errorTracking.js';
 import { isRealEmailDeliveryConfigured } from './services/emailService.js';
 import logger from './services/logger.js';
 // Import models for sequelize.sync() to recognize them
@@ -47,6 +48,9 @@ if (process.env.NODE_ENV !== 'production') {
 
 const app = express();
 let initializationPromise;
+
+// Initialize error tracking (Sentry)
+initializeSentry(app);
 
 export function initializeApp() {
   if (!initializationPromise) {
@@ -149,6 +153,9 @@ app.get('/api/scheduler/status', authMiddleware, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Sentry error handler (before general error handler)
+app.use(createSentryErrorHandler());
 
 // Error handler
 app.use(errorHandler);
