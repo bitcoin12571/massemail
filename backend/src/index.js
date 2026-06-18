@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
 import { sequelize } from './config/database.js';
 import { initializeQueue } from './services/queueService.js';
 import { initializeEmailService } from './services/emailService.js';
@@ -18,7 +20,7 @@ import parserRoutes from './routes/parser.js';
 import bulkSenderRoutes from './routes/bulkSender.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authMiddleware } from './middleware/auth.js';
-import { securityHeaders } from './middleware/security.js';
+import { securityHeaders, generateCsrfToken, verifyCsrfToken } from './middleware/security.js';
 import {
   generalLimiter,
   authLimiter,
@@ -80,6 +82,7 @@ export function initializeApp() {
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(securityHeaders);
+app.use(generateCsrfToken); // Generate CSRF token for GET requests
 app.use(cors(process.env.VERCEL
   ? { origin: false }
   : {
@@ -89,6 +92,7 @@ app.use(cors(process.env.VERCEL
     }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(verifyCsrfToken); // Verify CSRF token for state-changing requests
 
 app.use(async (req, res, next) => {
   try {
@@ -120,6 +124,13 @@ app.post('/api/contacts/send-now', authMiddleware, emailLimiter, async (req, res
   // This will be handled by the contacts route
   next();
 });
+
+// Swagger documentation
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  swaggerOptions: {
+    persistAuthorization: true
+  }
+}));
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -1,6 +1,7 @@
 import { DataTypes } from 'sequelize';
 import { sequelize } from '../config/database.js';
 import bcrypt from 'bcryptjs';
+import { validatePasswordStrength } from '../utils/passwordValidator.js';
 
 const User = sequelize.define('User', {
   id: {
@@ -16,7 +17,15 @@ const User = sequelize.define('User', {
   },
   password: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: false,
+    validate: {
+      validateStrength(value) {
+        const validation = validatePasswordStrength(value);
+        if (!validation.isValid) {
+          throw new Error(`Password validation failed: ${validation.errors.join(', ')}`);
+        }
+      }
+    }
   },
   name: {
     type: DataTypes.STRING,
@@ -29,6 +38,14 @@ const User = sequelize.define('User', {
   active: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  failedLoginAttempts: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  lockedUntil: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 }, {
   timestamps: true,

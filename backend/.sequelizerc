@@ -1,0 +1,5 @@
+export default {
+  config: 'src/config/database.js',
+  'migrations-path': 'src/migrations',
+  'seeders-path': 'src/seeders'
+}

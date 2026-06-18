@@ -2,6 +2,7 @@ import express from 'express';
 import jwt from 'jsonwebtoken';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import User from '../models/User.js';
+import { validatePasswordStrength } from '../utils/passwordValidator.js';
 
 const router = express.Router();
 const loginAttempts = new Map();
@@ -71,6 +72,15 @@ router.post('/register', async (req, res) => {
   try {
     const { email, password, name } = req.body;
 
+    // Validate password strength
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.isValid) {
+      return res.status(400).json({
+        error: 'Password does not meet security requirements',
+        details: passwordValidation.errors
+      });
+    }
+
     const existingUser = await User.findOne({ where: { email } });
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
@@ -90,7 +100,10 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   const { key, attempt } = getLoginAttempt(req);
   if (attempt.count >= MAX_LOGIN_ATTEMPTS) {
-    return res.status(429).json({ error: 'Too many login attempts. Try again later.' });
+    return res.status(429).json({
+      error: 'Too many login attempts. Try again later.',
+      retryAfter: Math.ceil((attempt.startedAt + LOGIN_WINDOW_MS - Date.now()) / 1000)
+    });
   }
 
   try {
@@ -122,7 +135,25 @@ router.post('/login', async (req, res) => {
       return res.status(503).json({ error: 'Authentication is not configured' });
     }
 
-    const user = await User.findOne({ where: { email } });
+    let user = await User.findOne({ where: { email: email?.toLowerCase() } });
+
+    // Check if account is locked
+    if (user && user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+      const remainingTime = Math.ceil((new Date(user.lockedUntil) - new Date()) / 1000);
+      return res.status(429).json({
+        error: 'Account is temporarily locked due to too many failed login attempts',
+        lockedUntil: user.lockedUntil,
+        retryAfter: remainingTime
+      });
+    }
+
+    // Unlock account if lockout period has expired
+    if (user && user.lockedUntil && new Date(user.lockedUntil) <= new Date()) {
+      user.failedLoginAttempts = 0;
+      user.lockedUntil = null;
+      await user.save();
+    }
+
     if (!user) {
       attempt.count += 1;
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -131,10 +162,24 @@ router.post('/login', async (req, res) => {
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       attempt.count += 1;
+
+      // Increment failed login attempts and lock if necessary
+      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+      if (user.failedLoginAttempts >= 5) {
+        // Lock account for 15 minutes
+        user.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+      }
+      await user.save();
+
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Successful login - reset attempt counters
     loginAttempts.delete(key);
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = null;
+    await user.save();
+
     const token = issueToken(user);
 
     res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
