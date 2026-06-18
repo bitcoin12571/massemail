@@ -19,6 +19,14 @@ import bulkSenderRoutes from './routes/bulkSender.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { securityHeaders } from './middleware/security.js';
+import {
+  generalLimiter,
+  authLimiter,
+  emailLimiter,
+  bulkEmailLimiter,
+  webhookLimiter,
+  uploadLimiter
+} from './middleware/rateLimit.js';
 import { isRealEmailDeliveryConfigured } from './services/emailService.js';
 import logger from './services/logger.js';
 // Import models for sequelize.sync() to recognize them
@@ -87,9 +95,12 @@ app.use(async (req, res, next) => {
   }
 });
 
+// Apply general rate limiting to all routes
+app.use(generalLimiter);
+
 // Routes (no auth)
-app.use('/api/auth', authRoutes);
-app.use('/api/webhooks', webhookRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/webhooks', webhookLimiter, webhookRoutes);
 
 // Protected routes
 app.use('/api/contacts', authMiddleware, contactRoutes);
@@ -97,8 +108,14 @@ app.use('/api/campaigns', authMiddleware, campaignRoutes);
 app.use('/api/settings', authMiddleware, settingsRoutes);
 app.use('/api/ai', authMiddleware, aiRoutes);
 app.use('/api/queue', authMiddleware, queueRoutes);
-app.use('/api/parser', authMiddleware, parserRoutes);
-app.use('/api/bulk-sender', authMiddleware, bulkSenderRoutes);
+app.use('/api/parser', authMiddleware, uploadLimiter, parserRoutes);
+app.use('/api/bulk-sender', authMiddleware, bulkEmailLimiter, bulkSenderRoutes);
+
+// Email sending route needs special rate limiting
+app.post('/api/contacts/send-now', authMiddleware, emailLimiter, async (req, res, next) => {
+  // This will be handled by the contacts route
+  next();
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
