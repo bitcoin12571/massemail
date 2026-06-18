@@ -25,8 +25,11 @@ function getJwtSecret() {
 }
 
 function secureEqual(left = '', right = '') {
-  const leftHash = createHash('sha256').update(String(left)).digest();
-  const rightHash = createHash('sha256').update(String(right)).digest();
+  // Always compare as strings, handle nullish values
+  const leftStr = String(left || '');
+  const rightStr = String(right || '');
+  const leftHash = createHash('sha256').update(leftStr).digest();
+  const rightHash = createHash('sha256').update(rightStr).digest();
   return timingSafeEqual(leftHash, rightHash);
 }
 
@@ -96,8 +99,9 @@ router.post('/login', async (req, res) => {
     const adminPassword = process.env.ADMIN_PASSWORD;
 
     if (adminEmail && adminPassword) {
-      const valid = secureEqual(email?.trim().toLowerCase(), adminEmail)
-        && secureEqual(password, adminPassword);
+      const normalizedEmail = email?.trim().toLowerCase() || '';
+      const valid = secureEqual(normalizedEmail, adminEmail)
+        && secureEqual(password || '', adminPassword);
 
       if (!valid) {
         attempt.count += 1;
