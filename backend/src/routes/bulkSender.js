@@ -1,6 +1,7 @@
 import logger from '../services/logger.js';
 import express from 'express';
 import { createBulkCampaign, sendBulkCampaign, sendBulkCampaignDirect, getCampaignStats, getAllCampaigns, deleteCampaign } from '../services/bulkSenderService.js';
+import BulkCampaign from '../models/BulkCampaign.js';
 import { bulkAttachmentUpload, serializeUploadedFiles } from '../middleware/upload.js';
 
 const router = express.Router();
@@ -50,9 +51,23 @@ router.post('/campaign/:campaignId/send', async (req, res) => {
       return res.status(400).json({ error: 'emailIds must be an array' });
     }
 
-    const result = Array.isArray(recipients) && campaign
+    const isDirectSend = Array.isArray(recipients) && campaign;
+    const result = isDirectSend
       ? await sendBulkCampaignDirect(campaign, recipients)
       : await sendBulkCampaign(parseInt(campaignId), emailIds);
+
+    if (isDirectSend) {
+      const storedCampaign = await BulkCampaign.findByPk(parseInt(campaignId));
+      if (storedCampaign) {
+        await storedCampaign.update({
+          status: 'completed',
+          totalRecipients: result.totalRecipients,
+          sentCount: result.sentCount,
+          failedCount: result.failedCount,
+          completedAt: new Date()
+        });
+      }
+    }
 
     res.json({
       success: true,

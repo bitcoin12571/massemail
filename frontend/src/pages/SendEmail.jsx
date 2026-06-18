@@ -20,8 +20,7 @@ import { CheckCircle, Eye, File, Image, Paperclip, Search, Send, Sparkles, Users
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { EmailPreviewModalCompose } from '../components/EmailPreviewModalCompose.jsx';
-import { addLocalSendHistory } from '../utils/localHistory';
-import { getContactDisplayName, mergeContacts } from '../utils/localContacts';
+import { getContactDisplayName } from '../utils/localContacts';
 
 export default function SendEmail({ onOpenSettings }) {
   const { language, t } = useLanguage();
@@ -51,21 +50,18 @@ export default function SendEmail({ onOpenSettings }) {
       try {
         const { data } = await API.get('/contacts', { params: { search, limit: 500 } });
         const query = search.trim().toLowerCase();
-        setContacts(mergeContacts(data.contacts).filter(contact =>
-          !query || contact.email.includes(query) || contact.name.toLowerCase().includes(query)
+        setContacts((data.contacts || []).filter(contact =>
+          !query || contact.email.includes(query) || String(contact.name || '').toLowerCase().includes(query)
         ));
-      } catch {
-        const query = search.trim().toLowerCase();
-        setContacts(mergeContacts().filter(contact =>
-          !query || contact.email.includes(query) || contact.name.toLowerCase().includes(query)
-        ));
+      } catch (error) {
+        setContacts([]);
+        setNotice({ type: 'error', text: getApiErrorMessage(error, t('loadRecipientsError')) });
       }
     }, 200);
     const handleContactsUpdate = () => {
-      const query = search.trim().toLowerCase();
-      setContacts(mergeContacts().filter(contact =>
-        !query || contact.email.includes(query) || contact.name.toLowerCase().includes(query)
-      ));
+      API.get('/contacts', { params: { search, limit: 500 } })
+        .then(({ data }) => setContacts(data.contacts || []))
+        .catch(() => setContacts([]));
     };
     window.addEventListener('mailora:contacts-updated', handleContactsUpdate);
     return () => {
@@ -153,18 +149,6 @@ export default function SendEmail({ onOpenSettings }) {
     }
   };
 
-  const getRecipientDisplayName = (contact) => (
-    String(contact?.company || contact?.name || contact?.email || '').trim()
-  );
-
-  const buildRecipientHistoryName = (contacts = []) => {
-    const names = contacts.map(getRecipientDisplayName).filter(Boolean);
-    if (!names.length) return subject || 'Direct email';
-    if (names.length === 1) return names[0];
-    if (names.length === 2) return `${names[0]}, ${names[1]}`;
-    return `${names[0]}, ${names[1]} + încă ${names.length - 2}`;
-  };
-
   const send = async () => {
     if (selectedContacts.length !== selected.length) {
       setNotice({ type: 'error', text: 'Lista de destinatari nu este încă sincronizată. Reîncearcă peste o secundă.' });
@@ -199,26 +183,7 @@ export default function SendEmail({ onOpenSettings }) {
         campaignId: response.data.campaignId
       });
 
-      // Create individual recipient records with status and timestamp
-      // Dacă API returnează sentCount = recipientCount, toți au fost trimși
-      const allSuccessful = response.data.sentCount === response.data.recipientCount;
-      const recipientsWithStatus = selectedContacts.map(contact => ({
-        email: contact.email,
-        name: contact.name || contact.email,
-        status: allSuccessful ? 'sent' : 'failed',
-        sentAt: new Date().toISOString()
-      }));
-
-      addLocalSendHistory({
-        id: response.data.campaignId || `direct-${Date.now()}`,
-        source: 'direct',
-        name: response.data.campaignName || buildRecipientHistoryName(selectedContacts),
-        subject,
-        totalRecipients: response.data.recipientCount,
-        sentCount: response.data.sentCount,
-        failedCount: response.data.failedCount || Math.max(0, response.data.recipientCount - response.data.sentCount),
-        recipients: recipientsWithStatus
-      });
+      window.dispatchEvent(new Event('mailora:history-updated'));
       setResultOpen(true);
 
       // Clear form
@@ -424,11 +389,11 @@ export default function SendEmail({ onOpenSettings }) {
                 <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1 }}>
                   <Typography variant="caption" color="text.secondary">{t('attachments')}</Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5 }}>
-                    {sendResult.filesCount} {sendResult.filesCount === 1 ? 'file' : 'files'}
+                    {sendResult.filesCount} {sendResult.filesCount === 1 ? t('attachedFileSingular') : t('attachedFilePlural')}
                   </Typography>
                 </Box>
                 <Box sx={{ p: 1.5, background: '#f3f4f6', borderRadius: 1, minWidth: 0 }}>
-                  <Typography variant="caption" color="text.secondary">Campaign ID</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('campaignCode')}</Typography>
                   <Typography
                     variant="body2"
                     sx={{ fontWeight: 600, mt: 0.5, fontFamily: 'monospace', overflowWrap: 'anywhere' }}

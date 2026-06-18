@@ -562,6 +562,21 @@ router.delete('/', async (req, res) => {
   }
 });
 
+router.patch('/:id', async (req, res) => {
+  try {
+    const contact = await Contact.findOne({
+      where: { id: req.params.id, createdBy: req.user.id }
+    });
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+
+    const nextName = typeof req.body?.name === 'string' ? req.body.name.trim() : contact.name;
+    await contact.update({ name: nextName || null });
+    res.json(contact);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Delete contact
 router.delete('/:id', async (req, res) => {
   try {

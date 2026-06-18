@@ -3,6 +3,11 @@ import React, { createContext, useContext, useMemo, useState } from 'react';
 const translations = {
   en: {
     emailDatabase: 'Email database',
+    adminAccess: 'Administrator access',
+    signIn: 'Sign in',
+    signingIn: 'Signing in...',
+    signInError: 'Could not sign in',
+    loginHelp: 'Authentication is required before contacts or email tools can be accessed.',
     sendHistory: 'Send history',
     deliveryStatus: 'Delivery status',
     systemSettings: 'System settings',
@@ -14,6 +19,21 @@ const translations = {
     databaseTitle: 'Email database',
     databaseSubtitle: 'Select any group of recipients and send one email to everyone with a single click.',
     importCsv: 'Import CSV',
+    csvTooLarge: 'CSV file must be 5 MB or smaller',
+    contactsLoadError: 'Contacts could not be loaded from the database',
+    contactAddError: 'Could not add this email',
+    contactDeleteConfirm: 'Delete this contact?',
+    contactDeleted: 'Contact deleted',
+    contactDeleteError: 'Could not delete this contact',
+    contactEditTitle: 'Edit name',
+    contactNameLabel: 'Name',
+    contactUpdated: 'Name updated',
+    contactUpdateError: 'Name could not be updated',
+    deleteAll: 'Delete all',
+    deleteAllContactsConfirm: 'Permanently delete all {count} contacts from the email database?',
+    contactsDeleted: '{count} contacts were permanently deleted.',
+    contactsDeleteError: 'Contacts could not be deleted',
+    csvImportFailed: 'CSV import failed',
     addEmail: 'Add email',
     companyRecipients: 'Company recipients',
     addressesAvailable: '{count} email addresses available',
@@ -57,6 +77,29 @@ const translations = {
     lastYear: 'Last year',
     allTime: 'All time',
     recentSends: 'Recent sends',
+    historyEyebrow: 'INTERNAL OPERATIONS',
+    historyLoadError: 'History could not be loaded from the database',
+    campaignDraftCreated: 'Campaign created and saved as draft',
+    contactsLoadSimpleError: 'Could not load contacts',
+    selectOneContact: 'Select at least one contact',
+    campaignQueued: '{count} emails added to the delivery queue',
+    campaignDeleteConfirmNamed: 'Delete "{name}"?',
+    moreEmailsSent: '+{count} more emails sent',
+    statusDraft: 'Draft',
+    statusPending: 'Pending',
+    statusQueued: 'Queued',
+    statusSending: 'Sending',
+    statusCompleted: 'Completed',
+    statusCompletedWithErrors: 'Completed with errors',
+    statusSent: 'Sent successfully',
+    statusFailed: 'Failed',
+    statusActive: 'Active',
+    campaignsLabel: 'Campaigns',
+    selectedPeriod: 'Selected period',
+    successfulDeliveries: 'Successful deliveries',
+    sentWithoutErrors: 'Sent without errors',
+    needsReview: 'Needs review',
+    campaignsCount: '{count} campaigns',
     staffMessages: 'Messages sent by company staff.',
     noEmails: 'No company emails sent yet',
     selectRecipients: 'Select recipients',
@@ -73,6 +116,16 @@ const translations = {
     deliveryProgress: 'Delivery progress',
     clearFailed: 'Clear failed',
     retryFailed: 'Retry failed',
+    deliveryEyebrow: 'DELIVERY',
+    failedCleared: 'Failed jobs cleared',
+    failedRetried: 'Failed jobs retried',
+    noFailedJobs: 'No failed jobs found',
+    queueActionFailed: 'Queue action failed',
+    deliveryActivityHelp: 'Persistent delivery activity from the database',
+    emailJobsLabel: 'Email jobs',
+    deliveryServiceName: 'Internal delivery service',
+    deliveryServiceAvailable: 'Email delivery service is available.',
+    serviceAvailability: 'Service availability',
     queueReady: 'The queue is ready',
     queueReadyHelp: 'Email jobs will appear here after you send a message.',
     settingsTitle: 'System settings',
@@ -118,6 +171,12 @@ const translations = {
     ,sendSuccessQueued: 'Emails queued for delivery'
     ,sendSuccessHelp: 'Emails will be delivered within the next few minutes. Check the Delivery Status page to monitor progress.'
     ,done: 'Done'
+    ,close: 'Close'
+    ,campaignCode: 'Campaign ID'
+    ,attachedFileSingular: 'file'
+    ,attachedFilePlural: 'files'
+    ,noName: 'No name'
+    ,sendToSelected: 'Send to {count}'
     ,composeTitle: 'Compose email'
     ,composeSubtitle: 'Choose clients, write the message and attach photos or documents.'
     ,chooseRecipients: 'Choose clients'
@@ -163,24 +222,29 @@ const translations = {
     ,csvImportSuccess: '{count} emails imported successfully!'
     ,validationSuccess: 'Validation complete: {validEmails} valid, {fixedCount} fixed'
     // Bulk Sender translations
-    ,bulkSenderEyebrow: 'EMAIL MASIV'
-    ,bulkSenderTitle: 'Manager campanii'
-    ,bulkSenderSubtitle: 'Creează și trimite campanii email în masă'
-    ,newCampaignBtn: 'Campanie nouă'
-    ,campaignNameHeader: 'Nume campanie'
-    ,regionHeader2: 'Regiune'
-    ,statusHeader: 'Stare'
-    ,recipientsHeader: 'Destinatari'
-    ,sentHeader: 'Trimise'
-    ,failedHeader: 'Eșuate'
-    ,actionsHeader: 'Acțiuni'
-    ,noCampaigns: 'Nu există campanii. Apasă „Campanie nouă” ca să începi.'
-    ,statsBtn: 'Statistici'
-    ,sendBtn: 'Trimite'
-    ,deleteBtn: 'Șterge'
+    ,bulkSenderEyebrow: 'BULK EMAIL'
+    ,bulkSenderTitle: 'Campaign manager'
+    ,bulkSenderSubtitle: 'Create and send bulk email campaigns'
+    ,newCampaignBtn: 'New campaign'
+    ,campaignNameHeader: 'Campaign name'
+    ,regionHeader2: 'Region'
+    ,statusHeader: 'Status'
+    ,recipientsHeader: 'Recipients'
+    ,sentHeader: 'Sent'
+    ,failedHeader: 'Failed'
+    ,actionsHeader: 'Actions'
+    ,noCampaigns: 'No campaigns yet. Click “New campaign” to get started.'
+    ,statsBtn: 'Stats'
+    ,sendBtn: 'Send'
+    ,deleteBtn: 'Delete'
     ,createCampaignTitle: 'Create New Campaign'
+    ,createCampaignHelp: 'Give your campaign a clear name and compelling content.'
     ,campaignNameLabel: 'Campaign Name'
     ,campaignSubjectLabel: 'Email Subject'
+    ,campaignTypeLabel: 'Campaign type'
+    ,regularCampaign: 'Regular campaign'
+    ,welcomeSeries: 'Welcome series'
+    ,selectRecipientsHelp: 'Choose which contacts to send this campaign to.'
     ,bulkAddImage: 'Add photo'
     ,bulkImageOnly: 'Only image files can be attached here.'
     ,targetRegionLabel: 'Target Region (Optional)'
@@ -190,6 +254,12 @@ const translations = {
     ,cancelBtn: 'Cancel'
     ,createBtn: 'Create Campaign'
     ,campaignStatsTitle: 'Campaign Statistics'
+    ,campaignRecipients: 'Recipients'
+    ,campaignSent: 'Sent'
+    ,campaignFailed: 'Failed'
+    ,campaignSuccessRate: 'Success rate'
+    ,campaignSentDate: 'Sent date'
+    ,deliveryProgressLabel: 'Delivery progress'
     ,campaignLabel: 'Campaign: {name}'
     ,createdLabel: 'Created: {date}'
     ,totalRecipientsLabel: 'Total Recipients:'
@@ -265,11 +335,11 @@ const translations = {
     ,parserCategoryEntertainment: 'Events and entertainment'
   },
   ro: {
-    emailDatabase: 'Baza de emailuri', sendHistory: 'Istoric trimiteri', deliveryStatus: 'Starea livrărilor', systemSettings: 'Setări sistem'
+    emailDatabase: 'Baza de emailuri', adminAccess: 'Acces administrator', signIn: 'Autentificare', signingIn: 'Se autentifică...', signInError: 'Autentificarea nu a reușit', loginHelp: 'Autentificarea este necesară înainte de accesarea contactelor și instrumentelor de email.', sendHistory: 'Istoric trimiteri', deliveryStatus: 'Starea livrărilor', systemSettings: 'Setări sistem'
     ,emailParser: 'Email Parser', bulkSender: 'Bulk Sender'
     ,companyTools: 'INSTRUMENTE COMPANIE', administrator: 'Administrator', companyAccess: 'Acces companie', searchDatabase: 'Caută în baza de emailuri...',
     databaseEyebrow: 'BAZA COMPANIEI', databaseTitle: 'Baza de emailuri', databaseSubtitle: 'Selectează clienții și trimite același email tuturor cu un singur click.',
-    importCsv: 'Importă CSV', addEmail: 'Adaugă email', companyRecipients: 'Clienții companiei', addressesAvailable: '{count} adrese de email disponibile',
+    importCsv: 'Importă CSV', csvTooLarge: 'Fișierul CSV trebuie să aibă maximum 5 MB', contactsLoadError: 'Contactele nu au putut fi încărcate din baza de date', contactAddError: 'Acest email nu a putut fi adăugat', contactDeleteConfirm: 'Ștergi acest contact?', contactDeleted: 'Contact șters', contactDeleteError: 'Acest contact nu a putut fi șters', contactEditTitle: 'Editează numele', contactNameLabel: 'Nume', contactUpdated: 'Numele a fost actualizat', contactUpdateError: 'Numele nu a putut fi actualizat', deleteAll: 'Șterge tot', deleteAllContactsConfirm: 'Ștergi definitiv toate cele {count} contacte din baza de emailuri?', contactsDeleted: '{count} contacte au fost șterse definitiv.', contactsDeleteError: 'Contactele nu au putut fi șterse', csvImportFailed: 'Importul CSV a eșuat', addEmail: 'Adaugă email', companyRecipients: 'Clienții companiei', addressesAvailable: '{count} adrese de email disponibile',
     searchRecipient: 'Caută nume, email sau companie', recipient: 'Client', company: 'Companie', status: 'Stare',
     importTitle: 'Importă baza de emailuri a companiei', importHelp: 'Încarcă un CSV sau adaugă adrese manual. Apoi selectează clienții și trimite imediat.',
     selectedRecipients: '{count} clienți selectați', readyDelivery: 'Pregătit pentru trimitere imediată', clearSelection: 'Șterge selecția', writeSend: 'Scrie și trimite email',
@@ -281,11 +351,14 @@ const translations = {
     imported: 'Au fost importate {imported} din {total} adrese', queued: 'Email trimis cu succes la {count} clienți',
     historyTitle: 'Istoric trimiteri', historySubtitle: 'Vezi mesajele trimise din baza companiei.', sendEmailNow: 'Trimite email acum', last30: 'Ultimele 30 zile',
     last7: 'Ultimele 7 zile', last3Weeks: 'Ultimele 3 săptămâni', last90: 'Ultimele 90 zile', lastYear: 'Ultimul an', allTime: 'Tot timpul',
-    recentSends: 'Trimiteri recente', staffMessages: 'Mesaje trimise de angajații companiei.', noEmails: 'Nu a fost trimis niciun email', selectRecipients: 'Selectează clienții',
+    recentSends: 'Trimiteri recente', historyEyebrow: 'OPERAȚIUNI INTERNE', historyLoadError: 'Istoricul nu a putut fi încărcat din baza de date', campaignDraftCreated: 'Campania a fost creată și salvată ca schiță', contactsLoadSimpleError: 'Contactele nu au putut fi încărcate', selectOneContact: 'Selectează cel puțin un contact', campaignQueued: '{count} emailuri au fost adăugate în coada de livrare', campaignDeleteConfirmNamed: 'Ștergi „{name}”?', moreEmailsSent: '+{count} emailuri trimise', statusDraft: 'Schiță', statusPending: 'În așteptare', statusQueued: 'În coadă', statusSending: 'Se trimite', statusCompleted: 'Finalizată', statusCompletedWithErrors: 'Finalizată cu erori', statusSent: 'Trimis cu succes', statusFailed: 'Eșuat', statusActive: 'Activ', campaignsLabel: 'Campanii', selectedPeriod: 'În perioada selectată', successfulDeliveries: 'Livrări reușite', sentWithoutErrors: 'Trimise fără eroare', needsReview: 'Necesită verificare', campaignsCount: '{count} campanii', staffMessages: 'Mesaje trimise de angajații companiei.', noEmails: 'Nu a fost trimis niciun email', selectRecipients: 'Selectează clienții',
     systemStatus: 'Starea sistemului', operational: 'Sistem funcțional', openDatabase: 'Deschide baza de emailuri',
     deliveryTitle: 'Starea livrărilor', deliverySubtitle: 'Urmărește trimiterile și rezolvă erorile.', refresh: 'Actualizează', waiting: 'În așteptare',
     sendingNow: 'Se trimit', delivered: 'Livrate', failed: 'Eșuate', deliveryProgress: 'Progres livrare', clearFailed: 'Șterge eșuate',
-    retryFailed: 'Reîncearcă', queueReady: 'Coada este pregătită', queueReadyHelp: 'Trimiterile vor apărea aici după expedierea unui mesaj.',
+    retryFailed: 'Reîncearcă', deliveryEyebrow: 'LIVRARE', failedCleared: 'Joburi eșuate șterse', failedRetried: 'Joburi eșuate reîncercate', noFailedJobs: 'Nu există joburi eșuate',
+    queueActionFailed: 'Acțiunea pe coadă a eșuat', deliveryActivityHelp: 'Activitate persistentă salvată în baza de date',
+    emailJobsLabel: 'Joburi email', deliveryServiceName: 'Serviciu intern de livrare', deliveryServiceAvailable: 'Serviciul de livrare email este disponibil.', serviceAvailability: 'Disponibilitate serviciu',
+    queueReady: 'Coada este pregătită', queueReadyHelp: 'Trimiterile vor apărea aici după expedierea unui mesaj.',
     settingsTitle: 'Setări sistem', settingsSubtitle: 'Configurează expeditorul și serviciul de trimitere al companiei.', saveSettings: 'Salvează setările',
     senderIdentity: 'Identitatea expeditorului', senderHelp: 'Ce văd clienții în inbox.', senderName: 'Numele expeditorului', senderEmail: 'Emailul expeditorului',
     emailProvider: 'Serviciu email', providerHelp: 'Alege cum sunt livrate emailurile companiei.', deliveryMethod: 'Metoda de livrare',
@@ -306,6 +379,12 @@ const translations = {
     ,sendSuccessQueued: 'Emailuri pregătite pentru livrare'
     ,sendSuccessHelp: 'Emailurile vor fi livrate în următoarele minute. Verifică pagina Starea livrărilor pentru progres.'
     ,done: 'Gata'
+    ,close: 'Închide'
+    ,campaignCode: 'ID campanie'
+    ,attachedFileSingular: 'fișier'
+    ,attachedFilePlural: 'fișiere'
+    ,noName: 'Fără nume'
+    ,sendToSelected: 'Trimite la {count}'
     ,composeTitle: 'Compune email'
     ,composeSubtitle: 'Alege clienții, scrie mesajul și atașează fotografii sau documente.'
     ,chooseRecipients: 'Alege clienții'
@@ -349,24 +428,29 @@ const translations = {
     ,csvImportSuccess: '{count} emails imported successfully!'
     ,validationSuccess: 'Validation complete: {validEmails} valid, {fixedCount} fixed'
     // Bulk Sender translations
-    ,bulkSenderEyebrow: 'BULK EMAIL'
-    ,bulkSenderTitle: 'Campaign Manager'
-    ,bulkSenderSubtitle: 'Create and send bulk email campaigns'
-    ,newCampaignBtn: 'New Campaign'
-    ,campaignNameHeader: 'Campaign Name'
-    ,regionHeader2: 'Region'
-    ,statusHeader: 'Status'
-    ,recipientsHeader: 'Recipients'
-    ,sentHeader: 'Sent'
-    ,failedHeader: 'Failed'
-    ,actionsHeader: 'Actions'
-    ,noCampaigns: 'No campaigns yet. Click "New Campaign" to get started.'
-    ,statsBtn: 'Stats'
-    ,sendBtn: 'Send'
-    ,deleteBtn: 'Delete'
-    ,createCampaignTitle: 'Crează Campanie Nouă'
-    ,campaignNameLabel: 'Nume Campanie'
-    ,campaignSubjectLabel: 'Subiect Email'
+    ,bulkSenderEyebrow: 'EMAIL MASIV'
+    ,bulkSenderTitle: 'Manager campanii'
+    ,bulkSenderSubtitle: 'Creează și trimite campanii email în masă'
+    ,newCampaignBtn: 'Campanie nouă'
+    ,campaignNameHeader: 'Nume campanie'
+    ,regionHeader2: 'Regiune'
+    ,statusHeader: 'Stare'
+    ,recipientsHeader: 'Destinatari'
+    ,sentHeader: 'Trimise'
+    ,failedHeader: 'Eșuate'
+    ,actionsHeader: 'Acțiuni'
+    ,noCampaigns: 'Nu există campanii. Apasă „Campanie nouă” ca să începi.'
+    ,statsBtn: 'Statistici'
+    ,sendBtn: 'Trimite'
+    ,deleteBtn: 'Șterge'
+    ,createCampaignTitle: 'Creează campanie nouă'
+    ,createCampaignHelp: 'Dă campaniei un nume clar și conținut convingător.'
+    ,campaignNameLabel: 'Nume campanie'
+    ,campaignSubjectLabel: 'Subiect email'
+    ,campaignTypeLabel: 'Tip campanie'
+    ,regularCampaign: 'Campanie obișnuită'
+    ,welcomeSeries: 'Serie de bun venit'
+    ,selectRecipientsHelp: 'Alege contactele cărora vrei să le trimiți campania.'
     ,bulkAddImage: 'Adaugă fotografie'
     ,bulkImageOnly: 'Aici poți atașa doar imagini.'
     ,targetRegionLabel: 'Regiunea Țintă (Opțional)'
@@ -374,8 +458,14 @@ const translations = {
     ,htmlTemplateLabel: 'Template HTML Email'
     ,htmlTemplateHelper: 'Folosește {{name}} și {{email}} pentru personalizare'
     ,cancelBtn: 'Anulează'
-    ,createBtn: 'Crează Campanie'
+    ,createBtn: 'Creează campanie'
     ,campaignStatsTitle: 'Statistici campanie'
+    ,campaignRecipients: 'Destinatari'
+    ,campaignSent: 'Trimise'
+    ,campaignFailed: 'Eșuate'
+    ,campaignSuccessRate: 'Rată succes'
+    ,campaignSentDate: 'Data trimiterii'
+    ,deliveryProgressLabel: 'Progres livrare'
     ,campaignLabel: 'Campanie: {name}'
     ,createdLabel: 'Creată: {date}'
     ,totalRecipientsLabel: 'Total destinatari:'
@@ -451,10 +541,10 @@ const translations = {
     ,parserCategoryEntertainment: 'Evenimente și divertisment'
   },
   ru: {
-    emailDatabase: 'База email', sendHistory: 'История отправок', deliveryStatus: 'Статус доставки', systemSettings: 'Настройки системы',
+    emailDatabase: 'База email', adminAccess: 'Доступ администратора', signIn: 'Войти', signingIn: 'Вход...', signInError: 'Не удалось войти', loginHelp: 'Требуется вход перед доступом к контактам и email-инструментам.', sendHistory: 'История отправок', deliveryStatus: 'Статус доставки', systemSettings: 'Настройки системы',
     companyTools: 'ИНСТРУМЕНТЫ КОМПАНИИ', administrator: 'Администратор', companyAccess: 'Доступ компании', searchDatabase: 'Поиск в базе email...',
     databaseEyebrow: 'БАЗА КОМПАНИИ', databaseTitle: 'База email', databaseSubtitle: 'Выберите клиентов и отправьте одно сообщение всем одним нажатием.',
-    importCsv: 'Импорт CSV', addEmail: 'Добавить email', companyRecipients: 'Клиенты компании', addressesAvailable: 'Доступно адресов: {count}',
+    importCsv: 'Импорт CSV', csvTooLarge: 'CSV-файл должен быть не больше 5 МБ', contactsLoadError: 'Контакты не удалось загрузить из базы данных', contactAddError: 'Не удалось добавить этот email', contactDeleteConfirm: 'Удалить этот контакт?', contactDeleted: 'Контакт удалён', contactDeleteError: 'Не удалось удалить этот контакт', contactEditTitle: 'Изменить имя', contactNameLabel: 'Имя', contactUpdated: 'Имя обновлено', contactUpdateError: 'Не удалось обновить имя', deleteAll: 'Удалить всё', deleteAllContactsConfirm: 'Навсегда удалить все контакты из базы email: {count}?', contactsDeleted: 'Контакты навсегда удалены: {count}.', contactsDeleteError: 'Не удалось удалить контакты', csvImportFailed: 'Импорт CSV не удался', addEmail: 'Добавить email', companyRecipients: 'Клиенты компании', addressesAvailable: 'Доступно адресов: {count}',
     searchRecipient: 'Поиск по имени, email или компании', recipient: 'Клиент', company: 'Компания', status: 'Статус',
     importTitle: 'Импорт базы email компании', importHelp: 'Загрузите CSV или добавьте адреса вручную. Затем выберите клиентов и отправьте сообщение.',
     selectedRecipients: 'Выбрано клиентов: {count}', readyDelivery: 'Готово к немедленной отправке', clearSelection: 'Очистить выбор', writeSend: 'Написать и отправить',
@@ -466,11 +556,14 @@ const translations = {
     imported: 'Импортировано {imported} из {total} адресов', queued: 'Письмо успешно отправлено {count} клиентам',
     historyTitle: 'История отправок', historySubtitle: 'Просмотр сообщений, отправленных из базы компании.', sendEmailNow: 'Отправить email', last30: 'Последние 30 дней',
     last7: 'Последние 7 дней', last3Weeks: 'Последние 3 недели', last90: 'Последние 90 дней', lastYear: 'Последний год', allTime: 'За всё время',
-    recentSends: 'Последние отправки', staffMessages: 'Сообщения сотрудников компании.', noEmails: 'Письма ещё не отправлялись', selectRecipients: 'Выбрать клиентов',
+    recentSends: 'Последние отправки', historyEyebrow: 'ВНУТРЕННИЕ ОПЕРАЦИИ', historyLoadError: 'Историю не удалось загрузить из базы данных', campaignDraftCreated: 'Кампания создана и сохранена как черновик', contactsLoadSimpleError: 'Не удалось загрузить контакты', selectOneContact: 'Выберите хотя бы один контакт', campaignQueued: 'Письма добавлены в очередь доставки: {count}', campaignDeleteConfirmNamed: 'Удалить «{name}»?', moreEmailsSent: '+ещё отправлено писем: {count}', statusDraft: 'Черновик', statusPending: 'Ожидает', statusQueued: 'В очереди', statusSending: 'Отправляется', statusCompleted: 'Завершена', statusCompletedWithErrors: 'Завершена с ошибками', statusSent: 'Успешно отправлено', statusFailed: 'Ошибка', statusActive: 'Активен', campaignsLabel: 'Кампании', selectedPeriod: 'За выбранный период', successfulDeliveries: 'Успешные доставки', sentWithoutErrors: 'Отправлены без ошибок', needsReview: 'Требует проверки', campaignsCount: 'Кампаний: {count}', staffMessages: 'Сообщения сотрудников компании.', noEmails: 'Письма ещё не отправлялись', selectRecipients: 'Выбрать клиентов',
     systemStatus: 'Статус системы', operational: 'Система работает', openDatabase: 'Открыть базу email',
     deliveryTitle: 'Статус доставки', deliverySubtitle: 'Контролируйте отправки и исправляйте ошибки.', refresh: 'Обновить', waiting: 'Ожидают',
     sendingNow: 'Отправляются', delivered: 'Доставлены', failed: 'Ошибки', deliveryProgress: 'Прогресс доставки', clearFailed: 'Очистить ошибки',
-    retryFailed: 'Повторить', queueReady: 'Очередь готова', queueReadyHelp: 'Отправки появятся здесь после отправки сообщения.',
+    retryFailed: 'Повторить', deliveryEyebrow: 'ДОСТАВКА', failedCleared: 'Ошибочные задачи очищены', failedRetried: 'Ошибочные задачи повторены', noFailedJobs: 'Ошибочных задач нет',
+    queueActionFailed: 'Действие с очередью не удалось', deliveryActivityHelp: 'Постоянная история доставки из базы данных',
+    emailJobsLabel: 'Email-задачи', deliveryServiceName: 'Внутренний сервис доставки', deliveryServiceAvailable: 'Сервис доставки email доступен.', serviceAvailability: 'Доступность сервиса',
+    queueReady: 'Очередь готова', queueReadyHelp: 'Отправки появятся здесь после отправки сообщения.',
     settingsTitle: 'Настройки системы', settingsSubtitle: 'Настройте отправителя и сервис доставки компании.', saveSettings: 'Сохранить',
     senderIdentity: 'Данные отправителя', senderHelp: 'Что клиенты увидят во входящих.', senderName: 'Имя отправителя', senderEmail: 'Email отправителя',
     emailProvider: 'Почтовый сервис', providerHelp: 'Выберите способ доставки писем.', deliveryMethod: 'Способ доставки',
@@ -491,6 +584,12 @@ const translations = {
     ,sendSuccessQueued: 'Письма поставлены в очередь доставки'
     ,sendSuccessHelp: 'Письма будут доставлены в ближайшие минуты. Проверьте страницу статуса доставки.'
     ,done: 'Готово'
+    ,close: 'Закрыть'
+    ,campaignCode: 'ID кампании'
+    ,attachedFileSingular: 'файл'
+    ,attachedFilePlural: 'файлов'
+    ,noName: 'Без имени'
+    ,sendToSelected: 'Отправить {count}'
     ,composeTitle: 'Создать письмо'
     ,composeSubtitle: 'Выберите клиентов, напишите сообщение и прикрепите фото или документы.'
     ,chooseRecipients: 'Выберите клиентов'
@@ -552,8 +651,13 @@ const translations = {
     ,sendBtn: 'Отправить'
     ,deleteBtn: 'Удалить'
     ,createCampaignTitle: 'Создать новую кампанию'
+    ,createCampaignHelp: 'Дайте кампании понятное имя и убедительное содержание.'
     ,campaignNameLabel: 'Название Кампании'
     ,campaignSubjectLabel: 'Тема письма'
+    ,campaignTypeLabel: 'Тип кампании'
+    ,regularCampaign: 'Обычная кампания'
+    ,welcomeSeries: 'Приветственная серия'
+    ,selectRecipientsHelp: 'Выберите контакты, которым нужно отправить кампанию.'
     ,bulkAddImage: 'Добавить фото'
     ,bulkImageOnly: 'Здесь можно прикреплять только изображения.'
     ,targetRegionLabel: 'Целевой регион (Опционально)'
@@ -563,6 +667,12 @@ const translations = {
     ,cancelBtn: 'Отмена'
     ,createBtn: 'Создать Кампанию'
     ,campaignStatsTitle: 'Статистика Кампании'
+    ,campaignRecipients: 'Получатели'
+    ,campaignSent: 'Отправлено'
+    ,campaignFailed: 'Ошибки'
+    ,campaignSuccessRate: 'Успешность'
+    ,campaignSentDate: 'Дата отправки'
+    ,deliveryProgressLabel: 'Прогресс доставки'
     ,campaignLabel: 'Кампания: {name}'
     ,createdLabel: 'Создано: {date}'
     ,totalRecipientsLabel: 'Всего получателей:'

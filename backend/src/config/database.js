@@ -16,10 +16,21 @@ if (process.env.NODE_ENV !== 'production') {
 } else {
   console.log(`[DATABASE] Production mode - using Vercel environment variables`);
 }
-const databaseUrl = process.env.DATABASE_URL
-  || process.env.NEON_DATABASE_URL
-  || process.env.NEON_POSTGRES_URL;
+const databaseUrlCandidates = [
+  process.env.DATABASE_URL,
+  process.env.NEON_DATABASE_URL,
+  process.env.NEON_POSTGRES_URL,
+  process.env.NEON_POSTGRES_URL_NON_POOLING,
+  process.env.NEON_DATABASE_URL_UNPOOLED
+].filter(Boolean);
+
+const databaseUrl = databaseUrlCandidates.find((url) => /^(postgres|postgresql):\/\//i.test(url));
 const usePostgres = /^(postgres|postgresql):\/\//i.test(databaseUrl || '');
+
+if (process.env.VERCEL && !usePostgres) {
+  throw new Error('A persistent PostgreSQL DATABASE_URL/NEON_DATABASE_URL is required on Vercel.');
+}
+
 const sqliteStorage = process.env.SQLITE_PATH
   || (process.env.VERCEL ? '/tmp/mailora.sqlite' : path.join(rootDir, 'mailora.sqlite'));
 

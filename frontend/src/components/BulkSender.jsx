@@ -23,14 +23,6 @@ import {
 import { Send, BarChart3, ImagePlus, Trash2, X } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
-import { addLocalSendHistory } from '../utils/localHistory';
-import { getLocalContacts } from '../utils/localContacts';
-import {
-  mergeCampaigns,
-  removeLocalCampaign,
-  saveLocalCampaign,
-  saveLocalCampaigns
-} from '../utils/localCampaigns';
 
 export default function BulkSender() {
   const { t } = useLanguage();
@@ -47,8 +39,18 @@ export default function BulkSender() {
   });
   const [attachments, setAttachments] = useState([]);
 
-  const getLocalRecipients = () => {
-    return getLocalContacts();
+  const statusLabel = (status) => {
+    const labels = {
+      draft: t('statusDraft'),
+      pending: t('statusPending'),
+      queued: t('statusQueued'),
+      sending: t('statusSending'),
+      completed: t('statusCompleted'),
+      completed_with_errors: t('statusCompletedWithErrors'),
+      sent: t('statusSent'),
+      failed: t('statusFailed')
+    };
+    return labels[status] || status || '-';
   };
 
   const closeCreateDialog = () => {
@@ -59,7 +61,7 @@ export default function BulkSender() {
 
   useEffect(() => {
     fetchCampaigns();
-    const handleCampaignsUpdate = () => setCampaigns(mergeCampaigns());
+    const handleCampaignsUpdate = () => fetchCampaigns();
     window.addEventListener('mailora:campaigns-updated', handleCampaignsUpdate);
     return () => window.removeEventListener('mailora:campaigns-updated', handleCampaignsUpdate);
   }, []);
@@ -67,25 +69,9 @@ export default function BulkSender() {
   const fetchCampaigns = async () => {
     try {
       const { data } = await API.get('/bulk-sender/campaigns');
-      saveLocalCampaigns(data.campaigns);
-      setCampaigns(mergeCampaigns(data.campaigns));
-      data.campaigns
-        .filter(campaign => campaign.status === 'completed')
-        .forEach(campaign => addLocalSendHistory({
-          id: `bulk-${campaign.id}`,
-          source: 'bulk',
-          name: campaign.name,
-          subject: campaign.subject,
-          totalRecipients: campaign.totalRecipients,
-          sentCount: campaign.sentCount,
-          failedCount: campaign.failedCount,
-          openedCount: campaign.openedCount,
-          clickedCount: campaign.clickedCount,
-          createdAt: campaign.createdAt,
-          sentAt: campaign.completedAt || campaign.updatedAt || campaign.createdAt
-        }));
+      setCampaigns(data.campaigns || []);
     } catch (error) {
-      setCampaigns(mergeCampaigns());
+      setCampaigns([]);
     }
   };
 
@@ -104,8 +90,7 @@ export default function BulkSender() {
       attachments.forEach(file => payload.append('attachments', file));
 
       const { data } = await API.post('/bulk-sender/campaign', payload);
-      saveLocalCampaign(data.campaign);
-      setCampaigns(mergeCampaigns([data.campaign]));
+      setCampaigns(current => [data.campaign, ...current.filter(campaign => campaign.id !== data.campaign.id)]);
       closeCreateDialog();
       setNotice({ type: 'success', text: t('campaignCreatedSuccess') });
     } catch (error) {
@@ -137,31 +122,15 @@ export default function BulkSender() {
     setLoading(true);
     try {
       const campaign = campaigns.find(item => item.id === campaignId);
-      const recipients = getLocalRecipients();
+      const contactsResponse = await API.get('/contacts', { params: { limit: 500 } });
+      const recipients = contactsResponse.data.contacts || [];
 
       const { data } = await API.post(`/bulk-sender/campaign/${campaignId}/send`, {
         campaign,
         recipients
       });
 
-      // Create individual recipient records with status and timestamp
-      const recipientsWithStatus = recipients.map(recipient => ({
-        email: recipient.email,
-        name: recipient.name || recipient.email,
-        status: 'sent',
-        sentAt: new Date().toISOString()
-      }));
-
-      addLocalSendHistory({
-        id: `bulk-${campaignId}`,
-        source: 'bulk',
-        name: campaign.name,
-        subject: campaign.subject,
-        totalRecipients: data.totalRecipients,
-        sentCount: data.sentCount,
-        failedCount: data.failedCount,
-        recipients: recipientsWithStatus
-      });
+      window.dispatchEvent(new Event('mailora:history-updated'));
       setNotice({ type: 'success', text: t('campaignSentSuccess', { count: data.sentCount }) });
       setCampaigns(current => current.map(item => item.id === campaignId
         ? {
@@ -172,14 +141,6 @@ export default function BulkSender() {
             failedCount: data.failedCount
           }
         : item));
-      saveLocalCampaign({
-        ...campaign,
-        status: 'completed',
-        totalRecipients: data.totalRecipients,
-        sentCount: data.sentCount,
-        failedCount: data.failedCount,
-        completedAt: new Date().toISOString()
-      });
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, t('campaignSendError')) });
     } finally {
@@ -192,12 +153,7 @@ export default function BulkSender() {
 
     setLoading(true);
     try {
-      removeLocalCampaign(campaignId);
-      try {
-        await API.delete(`/bulk-sender/campaign/${campaignId}`);
-      } catch {
-        // The serverless copy may already be gone; the persistent local copy is removed.
-      }
+      await API.delete(`/bulk-sender/campaign/${campaignId}`);
       setCampaigns(campaigns.filter(c => c.id !== campaignId));
       setNotice({ type: 'success', text: t('campaignDeletedSuccess') });
     } catch (error) {
@@ -249,7 +205,7 @@ export default function BulkSender() {
         {campaigns.length > 0 ? (
           <Table>
             <TableHead>
-              <TableRow sx={{ backgroundColor: '#f3f4f6' }}>
+                <TableRow>
                 <TableCell>{t('campaignNameHeader')}</TableCell>
                 <TableCell>{t('statusHeader')}</TableCell>
                 <TableCell align="right">{t('recipientsHeader')}</TableCell>
@@ -263,14 +219,8 @@ export default function BulkSender() {
                 <TableRow key={campaign.id} hover>
                   <TableCell>{campaign.name}</TableCell>
                   <TableCell>
-                    <Typography variant="caption" sx={{
-                      px: 1.5,
-                      py: 0.5,
-                      backgroundColor: campaign.status === 'completed' ? '#d1fae5' : '#fef3c7',
-                      color: campaign.status === 'completed' ? '#065f46' : '#92400e',
-                      borderRadius: '4px'
-                    }}>
-                      {campaign.status}
+                    <Typography variant="caption" className={`status-pill status-${campaign.status || 'pending'}`}>
+                      {statusLabel(campaign.status)}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">{campaign.totalRecipients}</TableCell>
@@ -330,7 +280,7 @@ export default function BulkSender() {
                 <Typography variant="body2" color="text.secondary">{campaign.subject}</Typography>
               </Box>
               <Typography variant="caption" className={`bulk-status bulk-status-${campaign.status}`}>
-                {campaign.status}
+                {statusLabel(campaign.status)}
               </Typography>
             </Box>
 

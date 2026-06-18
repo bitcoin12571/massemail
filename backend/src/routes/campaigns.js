@@ -119,6 +119,26 @@ router.get('/', async (req, res) => {
       })
       : [];
     const summaries = buildCampaignSummaries(statusRows);
+    const emailRows = campaignIds.length
+      ? await Email.findAll({
+        where: { campaignId: { [Op.in]: campaignIds } },
+        attributes: ['campaignId', 'recipientEmail', 'status', 'sentAt', 'createdAt'],
+        order: [['createdAt', 'DESC']],
+        raw: true
+      })
+      : [];
+    const recipientsByCampaign = emailRows.reduce((groups, email) => {
+      const current = groups.get(email.campaignId) || [];
+      if (current.length < 25) {
+        current.push({
+          email: email.recipientEmail,
+          status: ['sent', 'delivered', 'opened', 'clicked'].includes(email.status) ? 'sent' : email.status,
+          sentAt: email.sentAt || email.createdAt
+        });
+      }
+      groups.set(email.campaignId, current);
+      return groups;
+    }, new Map());
 
     res.json(campaigns.map((campaign) => {
       const summary = summaries.get(campaign.id) || {};
@@ -129,7 +149,8 @@ router.get('/', async (req, res) => {
         failedCount: summary.failedCount || 0,
         pendingCount: summary.pendingCount || 0,
         openedCount: summary.openedCount || 0,
-        clickedCount: summary.clickedCount || 0
+        clickedCount: summary.clickedCount || 0,
+        recipients: recipientsByCampaign.get(campaign.id) || []
       };
     }));
   } catch (error) {

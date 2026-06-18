@@ -14,10 +14,22 @@ function readStoredUser() {
   }
 }
 
+function clearLegacyBrowserOnlyData() {
+  const versionKey = 'mailoraServerSourceOfTruthVersion';
+  const currentVersion = '2026-06-18-server-v1';
+  if (localStorage.getItem(versionKey) === currentVersion) return;
+
+  localStorage.removeItem('mailoraParsedRecipients');
+  localStorage.removeItem('mailoraSendHistory');
+  localStorage.removeItem('mailoraBulkCampaigns');
+  localStorage.setItem(versionKey, currentVersion);
+}
+
 export default function App() {
   const [user, setUser] = useState(readStoredUser);
 
   useEffect(() => {
+    clearLegacyBrowserOnlyData();
     const logout = () => setUser(null);
     window.addEventListener('mailora:logout', logout);
     return () => window.removeEventListener('mailora:logout', logout);

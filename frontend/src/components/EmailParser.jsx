@@ -24,7 +24,6 @@ import {
 import { BadgeCheck, Building2, Database, ExternalLink, Mail, MapPin, Phone, Search, Square } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
-import { saveLocalContacts } from '../utils/localContacts';
 
 const CATEGORIES = [
   { value: 'all', labelKey: 'parserCategoryAll' },
@@ -179,20 +178,31 @@ export default function EmailParser() {
     setSelected(allSelected ? [] : contacts.map(contact => contact.email));
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     const verifiedContacts = selectedContacts.filter(contact =>
       contact.verified && contact.emailDomainValid
     );
-    saveLocalContacts(verifiedContacts.map(contact => ({
-      ...contact,
-      name: contact.name || contact.company,
-      region: contact.region || region.trim(),
-      source: 'regional_discovery'
-    })));
-    setNotice({
-      type: 'success',
-      text: t('parserImportDone', { count: verifiedContacts.length })
-    });
+    const csvData = [
+      'name,email',
+      ...verifiedContacts.map(contact => {
+        const name = String(contact.name || contact.company || '').replaceAll('"', '""');
+        return `"${name}",${contact.email}`;
+      })
+    ].join('\n');
+
+    try {
+      await API.post('/contacts/import', { csvData });
+      window.dispatchEvent(new Event('mailora:contacts-updated'));
+      setNotice({
+        type: 'success',
+        text: t('parserImportDone', { count: verifiedContacts.length })
+      });
+    } catch (error) {
+      setNotice({
+        type: 'error',
+        text: getApiErrorMessage(error, t('parserSearchFailed'))
+      });
+    }
   };
 
   return (

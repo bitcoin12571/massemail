@@ -614,6 +614,48 @@ body {
   text-transform: capitalize;
 }
 
+.status-chip,
+.status-pill {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1;
+  border: 1px solid transparent;
+}
+
+.status-chip .MuiChip-label {
+  padding: 0;
+}
+
+.status-completed,
+.status-sent,
+.status-active {
+  color: #047857 !important;
+  background: #d1fae5 !important;
+  border-color: #a7f3d0 !important;
+}
+
+.status-draft,
+.status-pending,
+.status-queued,
+.status-sending {
+  color: #92400e !important;
+  background: #fef3c7 !important;
+  border-color: #fde68a !important;
+}
+
+.status-failed,
+.status-completed_with_errors {
+  color: #991b1b !important;
+  background: #fee2e2 !important;
+  border-color: #fecaca !important;
+}
+
 .contacts-empty { min-height: 390px; }
 .empty-round, .queue-empty > svg { width: 64px; height: 64px; display: grid; place-items: center; padding: 16px; color: #6756e8; background: #efecff; border-radius: 18px; }
 .queue-panel { min-height: 330px; }
@@ -832,11 +874,40 @@ button:active:not(:disabled) {
   display: none !important;
 }
 
+.bulk-campaigns-table {
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  background: var(--bg-surface);
+}
+
+.bulk-campaigns-table .MuiTableHead-root .MuiTableCell-root {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.bulk-campaigns-table .MuiTableBody-root .MuiTableCell-root {
+  padding-top: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.bulk-campaigns-table .MuiTableRow-root:hover {
+  background: rgba(124, 58, 237, 0.035);
+}
+
 .bulk-campaign-card {
   padding: 18px;
   border: 1px solid var(--border-color);
-  border-radius: 14px !important;
-  box-shadow: 0 2px 10px rgba(31, 41, 55, 0.05) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  background: var(--bg-surface);
 }
 
 .bulk-card-header,

@@ -10,8 +10,10 @@ import {
 import { LockKeyhole } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import smartGrowthLogo from '../assets/smart-growth-ai-logo.png';
+import { useLanguage } from '../i18n.jsx';
 
 export default function Login({ onLogin }) {
+  const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -26,7 +28,7 @@ export default function Login({ onLogin }) {
       const { data } = await API.post('/auth/login', { email, password });
       onLogin(data.token, data.user);
     } catch (requestError) {
-      setError(getApiErrorMessage(requestError, 'Could not sign in'));
+      setError(getApiErrorMessage(requestError, t('signInError')));
     } finally {
       setLoading(false);
     }
@@ -44,15 +46,15 @@ export default function Login({ onLogin }) {
           />
           <Box>
             <Typography variant="h5">Smart Growth AI</Typography>
-            <Typography variant="body2" color="text.secondary">Administrator access</Typography>
+            <Typography variant="body2" color="text.secondary">{t('adminAccess')}</Typography>
           </Box>
         </Box>
 
         <Box className="login-heading">
           <LockKeyhole size={28} />
-          <Typography variant="h4" fontWeight={800}>Sign in</Typography>
+          <Typography variant="h4" fontWeight={800}>{t('signIn')}</Typography>
           <Typography color="text.secondary">
-            Authentication is required before contacts or email tools can be accessed.
+            {t('loginHelp')}
           </Typography>
         </Box>
 
@@ -77,7 +79,7 @@ export default function Login({ onLogin }) {
           fullWidth
         />
         <Button type="submit" variant="contained" size="large" disabled={loading}>
-          {loading ? 'Signing in...' : 'Sign in'}
+          {loading ? t('signingIn') : t('signIn')}
         </Button>
       </Paper>
     </Box>

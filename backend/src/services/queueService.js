@@ -3,7 +3,7 @@ import Email from '../models/Email.js';
 import Campaign from '../models/Campaign.js';
 import Contact from '../models/Contact.js';
 import JobQueue from '../models/JobQueue.js';
-import { fn, col } from 'sequelize';
+import { fn, col, Op } from 'sequelize';
 
 const jobs = [];
 const stats = { waiting: 0, active: 0, completed: 0, failed: 0 };
@@ -143,15 +143,19 @@ export const emailQueue = {
   async add(data) {
     const jobId = nextId++;
 
-    // Create job queue record in database
-    const jobQueueRecord = await JobQueue.create({
-      emailId: data.emailId,
-      campaignId: data.campaignId,
-      contactId: data.contactId,
-      status: 'waiting'
-    });
+    let jobQueueRecord = null;
+    try {
+      jobQueueRecord = await JobQueue.create({
+        emailId: data.emailId,
+        campaignId: data.campaignId,
+        contactId: data.contactId,
+        status: 'waiting'
+      });
+    } catch (error) {
+      console.error(`[EMAIL QUEUE] Could not persist waiting job ${jobId}:`, error.message);
+    }
 
-    jobs.push({ id: jobId, queueId: jobQueueRecord.id, ...data });
+    jobs.push({ id: jobId, queueId: jobQueueRecord?.id, ...data });
     stats.waiting += 1;
     console.log(`\n[EMAIL QUEUE] ✅ ✅ ✅ Job ${jobId} added!`);
     console.log(`[EMAIL QUEUE] Queue size: ${jobs.length}, Waiting: ${stats.waiting}\n`);
@@ -215,10 +219,15 @@ export async function getQueueStats() {
     });
 
     // Return combined stats (in-memory + persisted)
+    const total = inMemoryStats.total + Object.values(persistedStats).reduce((a, b) => a + b, 0);
     return {
+      waiting: inMemoryStats.waiting,
+      active: inMemoryStats.active,
+      completed: inMemoryStats.completed,
+      failed: inMemoryStats.failed,
       inMemory: inMemoryStats,
       persisted: persistedStats,
-      total: inMemoryStats.total + Object.values(persistedStats).reduce((a, b) => a + b, 0)
+      total
     };
   } catch (error) {
     console.error('Error getting queue stats:', error);
@@ -230,14 +239,29 @@ export async function getQueueStats() {
   }
 }
 
-export async function clearFailedJobs() {
-  const count = stats.failed;
-  stats.failed = 0;
-  return count;
+export async function clearFailedJobs({ campaignIds } = {}) {
+  const where = { status: 'failed' };
+  const emailWhere = { status: 'failed' };
+  if (Array.isArray(campaignIds)) {
+    where.campaignId = { [Op.in]: campaignIds };
+    emailWhere.campaignId = { [Op.in]: campaignIds };
+  }
+
+  const [jobCount, emailResult] = await Promise.all([
+    JobQueue.destroy({ where }),
+    Email.update({ status: 'bounced', failureReason: null }, { where: emailWhere })
+  ]);
+
+  const emailCount = Array.isArray(emailResult) ? Number(emailResult[0]) || 0 : Number(emailResult) || 0;
+  stats.failed = Math.max(0, stats.failed - Math.max(jobCount, emailCount));
+  return Math.max(jobCount, emailCount);
 }
 
-export async function retryFailedJobs() {
-  const failedEmails = await Email.findAll({ where: { status: 'failed' } });
+export async function retryFailedJobs({ campaignIds } = {}) {
+  const where = { status: 'failed' };
+  if (Array.isArray(campaignIds)) where.campaignId = { [Op.in]: campaignIds };
+
+  const failedEmails = await Email.findAll({ where });
   stats.failed = Math.max(0, stats.failed - failedEmails.length);
   for (const email of failedEmails) {
     await email.update({ status: 'pending', failureReason: null });

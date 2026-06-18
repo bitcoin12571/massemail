@@ -38,10 +38,10 @@ import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import AnimatedStatCard from '../components/AnimatedStatCard';
 import { containerVariants } from '../utils/animations';
-import { getLocalSendHistory, removeLocalSendHistory } from '../utils/localHistory';
 
 export default function CampaignDashboard({ onOpenDatabase }) {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+  const locale = language === 'ru' ? 'ru-RU' : language === 'en' ? 'en-US' : 'ro-RO';
   const [campaigns, setCampaigns] = useState([]);
   const [overview, setOverview] = useState({ contacts: 0, sent: 0, openRate: 0, clickRate: 0 });
   const [loading, setLoading] = useState(false);
@@ -61,6 +61,20 @@ export default function CampaignDashboard({ onOpenDatabase }) {
     textContent: ''
   });
 
+  const statusLabel = (status) => {
+    const labels = {
+      draft: t('statusDraft'),
+      pending: t('statusPending'),
+      queued: t('statusQueued'),
+      sending: t('statusSending'),
+      completed: t('statusCompleted'),
+      completed_with_errors: t('statusCompletedWithErrors'),
+      sent: t('statusSent'),
+      failed: t('statusFailed')
+    };
+    return labels[status] || status || '-';
+  };
+
   useEffect(() => {
     refresh();
     const handleHistoryUpdate = () => refresh();
@@ -71,46 +85,25 @@ export default function CampaignDashboard({ onOpenDatabase }) {
   const refresh = () => Promise.all([fetchCampaigns(), fetchOverview()]);
 
   const fetchCampaigns = async () => {
-    const localCampaigns = filterLocalHistory(getLocalSendHistory());
     try {
       const response = await API.get('/campaigns', { params: { days: period } });
       const serverCampaigns = response.data.map(campaign => normalizeCampaign(campaign, 'server'));
-      setCampaigns(mergeCampaignHistory(localCampaigns.map(campaign => normalizeCampaign(campaign)), serverCampaigns));
+      setCampaigns(mergeCampaignHistory(serverCampaigns));
     } catch (error) {
       console.error('Error fetching campaigns:', error);
-      setCampaigns(localCampaigns.map(campaign => normalizeCampaign(campaign)));
+      setCampaigns([]);
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('historyLoadError')) });
     }
   };
 
   const fetchOverview = async () => {
-    const localCampaigns = filterLocalHistory(getLocalSendHistory());
-    const localSent = localCampaigns.reduce((sum, campaign) => sum + campaign.sentCount, 0);
-    const localFailed = localCampaigns.reduce((sum, campaign) => sum + campaign.failedCount, 0);
-    const localTotal = localSent + localFailed;
     try {
       const response = await API.get('/campaigns/overview', { params: { days: period } });
-      setOverview({
-        ...response.data,
-        sent: response.data.sent + localSent,
-        failed: localFailed,
-        successRate: localTotal ? Math.round((localSent / localTotal) * 100) : 0
-      });
+      setOverview(response.data);
     } catch (error) {
       console.error('Error fetching overview:', error);
-      setOverview({
-        contacts: 0,
-        sent: localSent,
-        failed: localFailed,
-        successRate: localTotal ? Math.round((localSent / localTotal) * 100) : 0
-      });
+      setOverview({ contacts: 0, sent: 0, failed: 0, successRate: 0 });
     }
-  };
-
-  const filterLocalHistory = (history) => {
-    const days = Number(period);
-    if (!days) return history;
-    const threshold = Date.now() - days * 24 * 60 * 60 * 1000;
-    return history.filter(entry => new Date(entry.sentAt || entry.createdAt).getTime() >= threshold);
   };
 
   const getNumber = (...values) => {
@@ -175,10 +168,10 @@ export default function CampaignDashboard({ onOpenDatabase }) {
       await API.post('/campaigns', formData);
       setFormData({ name: '', subject: '', htmlContent: '', textContent: '' });
       setOpenDialog(false);
-      setNotice({ type: 'success', text: 'Campaign created and saved as draft' });
+      setNotice({ type: 'success', text: t('campaignDraftCreated') });
       refresh();
     } catch (error) {
-      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not create campaign') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('campaignCreatedError')) });
     } finally {
       setLoading(false);
     }
@@ -192,52 +185,47 @@ export default function CampaignDashboard({ onOpenDatabase }) {
       setCampaignToSend(campaign);
       setSendDialog(true);
     } catch (error) {
-      setNotice({ type: 'error', text: 'Could not load contacts' });
+      setNotice({ type: 'error', text: t('contactsLoadSimpleError') });
     }
   };
 
   const handleSendCampaign = async () => {
     if (!selectedContactIds.length) {
-      setNotice({ type: 'error', text: 'Select at least one contact' });
+      setNotice({ type: 'error', text: t('selectOneContact') });
       return;
     }
     setLoading(true);
     try {
       const { data } = await API.post(`/campaigns/${campaignToSend.id}/send`, { contactIds: selectedContactIds });
-      setNotice({ type: 'success', text: `${data.emailCount} emails added to the delivery queue` });
+      setNotice({ type: 'success', text: t('campaignQueued', { count: data.emailCount }) });
       setSendDialog(false);
       refresh();
     } catch (error) {
-      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not send campaign') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('campaignSendError')) });
     } finally {
       setLoading(false);
     }
   };
 
   const deleteCampaign = async (campaign) => {
-    if (!window.confirm(`Delete "${campaign.name}"?`)) return;
-    if (campaign.source !== 'server') {
-      removeLocalSendHistory(campaign.id);
-      refresh();
-      return;
-    }
+    if (!window.confirm(t('campaignDeleteConfirmNamed', { name: campaign.name }))) return;
     setLoading(true);
     try {
       await API.delete(`/campaigns/${campaign.id}`);
-      setNotice({ type: 'success', text: 'Campaign deleted' });
+      setNotice({ type: 'success', text: t('campaignDeletedSuccess') });
       refresh();
     } catch (error) {
-      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Could not delete campaign') });
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('campaignDeleteError')) });
     } finally {
       setLoading(false);
     }
   };
 
   const statCards = [
-    { label: 'Campanii', value: campaigns.length, change: 'În perioada selectată', icon: UsersRound, tone: 'violet' },
-    { label: 'Emailuri trimise', value: overview.sent || 0, change: 'Livrări reușite', icon: Send, tone: 'blue' },
-    { label: 'Rată de succes', value: `${overview.successRate ?? overview.openRate ?? 0}%`, change: 'Trimise fără eroare', icon: MailCheck, tone: 'green' },
-    { label: 'Emailuri eșuate', value: overview.failed || 0, change: 'Necesită verificare', icon: MousePointerClick, tone: 'orange' }
+    { label: t('campaignsLabel'), value: campaigns.length, change: t('selectedPeriod'), icon: UsersRound, tone: 'violet' },
+    { label: t('campaignSent'), value: overview.sent || 0, change: t('successfulDeliveries'), icon: Send, tone: 'blue' },
+    { label: t('campaignSuccessRate'), value: `${overview.successRate ?? overview.openRate ?? 0}%`, change: t('sentWithoutErrors'), icon: MailCheck, tone: 'green' },
+    { label: t('campaignFailed'), value: overview.failed || 0, change: t('needsReview'), icon: MousePointerClick, tone: 'orange' }
   ];
   const periods = [
     { value: '7', label: t('last7') },
@@ -253,7 +241,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
     <>
       <Box className="page-heading">
         <Box>
-          <Typography className="eyebrow">INTERNAL OPERATIONS</Typography>
+          <Typography className="eyebrow">{t('historyEyebrow')}</Typography>
           <Typography variant="h3">{t('historyTitle')}</Typography>
           <Typography color="text.secondary">{t('historySubtitle')}</Typography>
         </Box>
@@ -318,7 +306,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
               <Typography variant="h6">{t('recentSends')}</Typography>
               <Typography variant="body2" color="text.secondary">{t('staffMessages')}</Typography>
             </Box>
-            <Typography variant="body2" color="text.secondary">{campaigns.length} campanii</Typography>
+            <Typography variant="body2" color="text.secondary">{t('campaignsCount', { count: campaigns.length })}</Typography>
           </Box>
 
           {campaigns.length === 0 ? (
@@ -333,7 +321,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
               </Box>
               <Typography variant="h5">{t('noEmails')}</Typography>
               <Typography color="text.secondary">
-                Open the company database, select the recipients and send one message to everyone.
+                {t('importHelp')}
               </Typography>
               <Button variant="contained" startIcon={<Send size={18} />} onClick={onOpenDatabase}>
                 {t('selectRecipients')}
@@ -350,18 +338,18 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                       <Typography fontWeight={750}>{campaign.name}</Typography>
                       <Typography variant="body2" color="text.secondary">{campaign.subject}</Typography>
                     </Box>
-                    <Chip label={campaign.status} size="small" />
+                    <Chip label={statusLabel(campaign.status)} size="small" className={`status-chip status-${campaign.status || 'pending'}`} />
                     <Button
                       size="small"
                       variant="outlined"
                       startIcon={<BarChart3 size={15} />}
                       onClick={() => setSelectedStats(campaign)}
                     >
-                      Statistici
+                      {t('statsBtn')}
                     </Button>
                     {campaign.status === 'draft' && (
                       <Button size="small" variant="contained" startIcon={<Send size={15} />} disabled={loading} onClick={() => openSendDialog(campaign)}>
-                        Send
+                        {t('sendBtn')}
                       </Button>
                     )}
                     <IconButton color="error" onClick={() => deleteCampaign(campaign)}><Trash2 size={17} /></IconButton>
@@ -378,12 +366,12 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                     }}>
                       {campaign.recipients.slice(0, 5).map((recipient, idx) => {
                         const sentDate = new Date(recipient.sentAt);
-                        const dateStr = sentDate.toLocaleDateString('ro-RO', {
+                        const dateStr = sentDate.toLocaleDateString(locale, {
                           day: '2-digit',
                           month: '2-digit',
                           year: 'numeric'
                         });
-                        const timeStr = sentDate.toLocaleTimeString('ro-RO', {
+                        const timeStr = sentDate.toLocaleTimeString(locale, {
                           hour: '2-digit',
                           minute: '2-digit',
                           second: '2-digit'
@@ -410,11 +398,11 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                                 {recipient.email}
                               </Typography>
                               <Typography variant="caption" sx={{ color: '#6b7280', mt: 0.5, display: 'block' }}>
-                                📅 {dateStr} • 🕐 {timeStr}
+                                {dateStr} • {timeStr}
                               </Typography>
                             </Box>
                             <Chip
-                              label={recipient.status === 'sent' ? '✅ Trimis cu succes' : '❌ Eșuat'}
+                              label={recipient.status === 'sent' ? t('statusSent') : t('statusFailed')}
                               size="small"
                               sx={{
                                 backgroundColor: recipient.status === 'sent' ? '#d1fae5' : '#fee2e2',
@@ -434,7 +422,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                           pl: 2
                         }}>
                           <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 500 }}>
-                            ➕ {campaign.recipients.length - 5} alte emailuri trimise
+                            {t('moreEmailsSent', { count: campaign.recipients.length - 5 })}
                           </Typography>
                         </Box>
                       )}
@@ -450,7 +438,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
           <Box className="panel-header">
             <Box>
               <Typography variant="h6">{t('systemStatus')}</Typography>
-              <Typography variant="body2" color="text.secondary">Internal delivery service</Typography>
+              <Typography variant="body2" color="text.secondary">{t('deliveryServiceName')}</Typography>
             </Box>
             <IconButton><MoreHorizontal size={18} /></IconButton>
           </Box>
@@ -459,19 +447,19 @@ export default function CampaignDashboard({ onOpenDatabase }) {
           </Box>
           <Typography textAlign="center" fontWeight={750}>{t('operational')}</Typography>
           <Typography textAlign="center" variant="body2" color="text.secondary">
-            Email delivery service is available.
+            {t('deliveryServiceAvailable')}
           </Typography>
           <Box className="progress-label">
-            <span>Service availability</span><strong>100%</strong>
+            <span>{t('serviceAvailability')}</span><strong>100%</strong>
           </Box>
           <LinearProgress variant="determinate" value={100} color="success" />
           <Button fullWidth variant="outlined" onClick={onOpenDatabase}>{t('openDatabase')}</Button>
         </Paper>
       </Box>
 
-      <Dialog className="responsive-dialog" open={Boolean(selectedStats)} onClose={() => setSelectedStats(null)} maxWidth="sm" fullWidth>
+      <Dialog key={`stats-${language}`} className="responsive-dialog" open={Boolean(selectedStats)} onClose={() => setSelectedStats(null)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', color: 'white', pb: 3, borderBottom: 'none' }}>
-          <Typography variant="h5" fontWeight={900} sx={{ mb: 0.5 }}>📊 Statistici Campanie</Typography>
+          <Typography variant="h5" fontWeight={900} sx={{ mb: 0.5 }}>{t('campaignStatsTitle')}</Typography>
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>{selectedStats?.name}</Typography>
         </DialogTitle>
         <DialogContent sx={{ pt: 3, pb: 3, px: 2 }}>
@@ -488,7 +476,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                   textAlign: 'center'
                 }}>
                   <Typography variant="caption" sx={{ color: '#6366f1', fontWeight: 600, textTransform: 'uppercase' }}>
-                    👥 Destinatari
+                    {t('campaignRecipients')}
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 900, color: '#4f46e5', mt: 1 }}>
                     {selectedStats.totalRecipients || 0}
@@ -504,7 +492,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                   textAlign: 'center'
                 }}>
                   <Typography variant="caption" sx={{ color: '#15803d', fontWeight: 600, textTransform: 'uppercase' }}>
-                    ✅ Trimise
+                    {t('campaignSent')}
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 900, color: '#16a34a', mt: 1 }}>
                     {selectedStats.sentCount || 0}
@@ -520,7 +508,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                   textAlign: 'center'
                 }}>
                   <Typography variant="caption" sx={{ color: '#991b1b', fontWeight: 600, textTransform: 'uppercase' }}>
-                    ❌ Eșuate
+                    {t('campaignFailed')}
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 900, color: '#dc2626', mt: 1 }}>
                     {selectedStats.failedCount || 0}
@@ -536,7 +524,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                   textAlign: 'center'
                 }}>
                   <Typography variant="caption" sx={{ color: '#92400e', fontWeight: 600, textTransform: 'uppercase' }}>
-                    📈 Rată Succes
+                    {t('campaignSuccessRate')}
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 900, color: '#b45309', mt: 1 }}>
                     {selectedStats.totalRecipients ? Math.round(((selectedStats.sentCount || 0) / selectedStats.totalRecipients) * 100) : 0}%
@@ -554,7 +542,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                 border: '1px solid #e5e7eb'
               }}>
                 <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>
-                  📨 Subiect
+                  {t('subject')}
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.75, color: '#1f2937', wordBreak: 'break-word' }}>
                   {selectedStats.subject || '-'}
@@ -569,10 +557,10 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                 border: '1px solid #e5e7eb'
               }}>
                 <Typography variant="caption" sx={{ color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>
-                  🕐 Data Trimiterii
+                  {t('campaignSentDate')}
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.75, color: '#1f2937' }}>
-                  {new Date(selectedStats.sentAt || selectedStats.createdAt).toLocaleString('ro-RO', {
+                  {new Date(selectedStats.sentAt || selectedStats.createdAt).toLocaleString(locale, {
                     day: '2-digit',
                     month: '2-digit',
                     year: 'numeric',
@@ -588,7 +576,7 @@ export default function CampaignDashboard({ onOpenDatabase }) {
                 <Box sx={{ mt: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="caption" sx={{ fontWeight: 600, color: '#374151' }}>
-                      Progres Livrare
+                      {t('deliveryProgressLabel')}
                     </Typography>
                     <Typography variant="caption" sx={{ fontWeight: 700, color: '#16a34a' }}>
                       {Math.round(((selectedStats.sentCount || 0) / selectedStats.totalRecipients) * 100)}%
@@ -623,35 +611,35 @@ export default function CampaignDashboard({ onOpenDatabase }) {
               px: 3
             }}
           >
-            Închide
+            {t('closeBtn')}
           </Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          <Typography variant="h5" fontWeight={800}>Create a new campaign</Typography>
-          <Typography variant="body2" color="text.secondary">Give your campaign a clear name and compelling content.</Typography>
+          <Typography variant="h5" fontWeight={800}>{t('createCampaignTitle')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('createCampaignHelp')}</Typography>
         </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '12px !important' }}>
-          <TextField label="Campaign name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
-          <TextField label="Email subject" value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} />
-          <TextField select label="Campaign type" defaultValue="regular">
-            <MenuItem value="regular">Regular campaign</MenuItem>
-            <MenuItem value="welcome">Welcome series</MenuItem>
+          <TextField label={t('campaignNameLabel')} value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+          <TextField label={t('campaignSubjectLabel')} value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} />
+          <TextField select label={t('campaignTypeLabel')} defaultValue="regular">
+            <MenuItem value="regular">{t('regularCampaign')}</MenuItem>
+            <MenuItem value="welcome">{t('welcomeSeries')}</MenuItem>
           </TextField>
-          <TextField label="HTML content" multiline rows={4} value={formData.htmlContent} onChange={(e) => setFormData({ ...formData, htmlContent: e.target.value })} />
+          <TextField label={t('htmlTemplateLabel')} multiline rows={4} value={formData.htmlContent} onChange={(e) => setFormData({ ...formData, htmlContent: e.target.value })} />
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 1 }}>
-          <Button color="inherit" onClick={() => setOpenDialog(false)}>Cancel</Button>
-          <Button variant="contained" disabled={loading || !formData.name || !formData.subject || !formData.htmlContent} onClick={handleCreateCampaign}>Create campaign</Button>
+          <Button color="inherit" onClick={() => setOpenDialog(false)}>{t('cancel')}</Button>
+          <Button variant="contained" disabled={loading || !formData.name || !formData.subject || !formData.htmlContent} onClick={handleCreateCampaign}>{t('createBtn')}</Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={sendDialog} onClose={() => setSendDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
-          <Typography variant="h5" fontWeight={800}>Select recipients</Typography>
-          <Typography variant="body2" color="text.secondary">Choose which contacts to send this campaign to.</Typography>
+          <Typography variant="h5" fontWeight={800}>{t('selectRecipients')}</Typography>
+          <Typography variant="body2" color="text.secondary">{t('selectRecipientsHelp')}</Typography>
         </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: '12px !important', maxHeight: '400px', overflow: 'auto' }}>
           {sendContacts.map((contact) => (
@@ -669,14 +657,14 @@ export default function CampaignDashboard({ onOpenDatabase }) {
               />
               <Box sx={{ flex: 1 }}>
                 <Typography variant="body2" fontWeight={600}>{contact.email}</Typography>
-                <Typography variant="caption" color="text.secondary">{contact.name || 'No name'}</Typography>
+                <Typography variant="caption" color="text.secondary">{contact.name || t('noName')}</Typography>
               </Box>
             </Box>
           ))}
         </DialogContent>
         <DialogActions sx={{ p: 3, pt: 1 }}>
-          <Button color="inherit" onClick={() => setSendDialog(false)}>Cancel</Button>
-          <Button variant="contained" disabled={loading || !selectedContactIds.length} onClick={handleSendCampaign}>Send to {selectedContactIds.length}</Button>
+          <Button color="inherit" onClick={() => setSendDialog(false)}>{t('cancel')}</Button>
+          <Button variant="contained" disabled={loading || !selectedContactIds.length} onClick={handleSendCampaign}>{t('sendToSelected', { count: selectedContactIds.length })}</Button>
         </DialogActions>
       </Dialog>
 

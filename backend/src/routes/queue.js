@@ -1,6 +1,8 @@
 import express from 'express';
-import { getQueueStats } from '../services/queueService.js';
+import { Op } from 'sequelize';
+import { clearFailedJobs, getQueueStats, retryFailedJobs } from '../services/queueService.js';
 import JobQueue from '../models/JobQueue.js';
+import Campaign from '../models/Campaign.js';
 
 const router = express.Router();
 
@@ -44,6 +46,41 @@ router.get('/history', async (req, res) => {
   }
 });
 
+async function getUserCampaignIds(userId) {
+  const campaigns = await Campaign.findAll({
+    where: { createdBy: userId },
+    attributes: ['id'],
+    raw: true
+  });
+  return campaigns.map((campaign) => campaign.id);
+}
+
+router.post('/failed/clear', async (req, res) => {
+  try {
+    const campaignIds = await getUserCampaignIds(req.user.id);
+    const cleared = campaignIds.length
+      ? await clearFailedJobs({ campaignIds })
+      : 0;
+    res.json({ success: true, cleared });
+  } catch (error) {
+    console.error('Error clearing failed jobs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/failed/retry', async (req, res) => {
+  try {
+    const campaignIds = await getUserCampaignIds(req.user.id);
+    const retried = campaignIds.length
+      ? await retryFailedJobs({ campaignIds })
+      : 0;
+    res.json({ success: true, retried });
+  } catch (error) {
+    console.error('Error retrying failed jobs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET single job details
 router.get('/:jobId', async (req, res) => {
   try {
@@ -70,7 +107,7 @@ router.delete('/cleanup', async (req, res) => {
       where: {
         status: ['completed', 'failed'],
         createdAt: {
-          [require('sequelize').Op.lt]: cutoffDate
+          [Op.lt]: cutoffDate
         }
       }
     });
