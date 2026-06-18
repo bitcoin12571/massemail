@@ -30,6 +30,7 @@ import {
   uploadLimiter
 } from './middleware/rateLimit.js';
 import { initializeSentry, createSentryErrorHandler } from './middleware/errorTracking.js';
+import { checkSessionTimeout } from './middleware/sessionTimeout.js';
 import { isRealEmailDeliveryConfigured } from './services/emailService.js';
 import logger from './services/logger.js';
 // Import models for sequelize.sync() to recognize them
@@ -42,6 +43,8 @@ import './models/JobQueue.js';
 import './models/ParsedEmail.js';
 import './models/BulkCampaign.js';
 import './models/BulkCampaignSend.js';
+import './models/Session.js';
+import './models/AuditLog.js';
 
 // Load .env only in development (Vercel uses environment variables)
 if (process.env.NODE_ENV !== 'production') {
@@ -110,14 +113,14 @@ app.use(generalLimiter);
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/webhooks', webhookLimiter, webhookRoutes);
 
-// Protected routes
-app.use('/api/contacts', authMiddleware, contactRoutes);
-app.use('/api/campaigns', authMiddleware, campaignRoutes);
-app.use('/api/settings', authMiddleware, settingsRoutes);
-app.use('/api/ai', authMiddleware, aiRoutes);
-app.use('/api/queue', authMiddleware, queueRoutes);
-app.use('/api/parser', authMiddleware, uploadLimiter, parserRoutes);
-app.use('/api/bulk-sender', authMiddleware, bulkEmailLimiter, bulkSenderRoutes);
+// Protected routes (with session timeout checking)
+app.use('/api/contacts', authMiddleware, checkSessionTimeout, contactRoutes);
+app.use('/api/campaigns', authMiddleware, checkSessionTimeout, campaignRoutes);
+app.use('/api/settings', authMiddleware, checkSessionTimeout, settingsRoutes);
+app.use('/api/ai', authMiddleware, checkSessionTimeout, aiRoutes);
+app.use('/api/queue', authMiddleware, checkSessionTimeout, queueRoutes);
+app.use('/api/parser', authMiddleware, checkSessionTimeout, uploadLimiter, parserRoutes);
+app.use('/api/bulk-sender', authMiddleware, checkSessionTimeout, bulkEmailLimiter, bulkSenderRoutes);
 
 // Email sending route needs special rate limiting
 app.post('/api/contacts/send-now', authMiddleware, emailLimiter, async (req, res, next) => {

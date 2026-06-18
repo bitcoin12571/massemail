@@ -1,8 +1,10 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual, randomBytes } from 'node:crypto';
 import User from '../models/User.js';
+import Session from '../models/Session.js';
 import { validatePasswordStrength } from '../utils/passwordValidator.js';
+import { logLogin, logLogout } from '../services/auditService.js';
 
 const router = express.Router();
 const loginAttempts = new Map();
@@ -255,8 +257,46 @@ router.post('/login', async (req, res) => {
     await user.save();
 
     const token = issueToken(user);
+    const sessionId = randomBytes(32).toString('hex');
+    const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 30;
+    const expiresAt = new Date(Date.now() + sessionTimeout * 60 * 1000);
 
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    // Create session record
+    try {
+      await Session.create({
+        userId: user.id,
+        sessionId,
+        expiresAt,
+        ipAddress: req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim(),
+        userAgent: req.headers['user-agent']
+      });
+      await logLogin(user.id, req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim(), true);
+    } catch (sessionError) {
+      console.error('Session creation error:', sessionError);
+      // Don't fail login if session creation fails
+    }
+
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role }, sessionId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Logout
+router.post('/logout', async (req, res) => {
+  try {
+    const sessionId = req.headers['x-session-id'];
+    const userId = req.user?.id;
+
+    if (sessionId && userId) {
+      await Session.update(
+        { active: false },
+        { where: { sessionId, userId } }
+      );
+      await logLogout(userId, req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim());
+    }
+
+    res.json({ message: 'Logged out successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

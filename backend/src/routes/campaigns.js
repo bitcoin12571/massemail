@@ -13,6 +13,7 @@ import { validateRequest } from '../middleware/validation.js';
 import { campaignSchema, campaignSendSchema, previewEmailSchema } from '../schemas/email.schema.js';
 import { emailSendLimiter, campaignSendLimiter } from '../middleware/rateLimiter.js';
 import logger from '../services/logger.js';
+import { logCampaignAction } from '../services/auditService.js';
 
 const router = express.Router();
 
