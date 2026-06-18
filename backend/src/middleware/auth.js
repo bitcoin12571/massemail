@@ -28,7 +28,9 @@ export const authMiddleware = (req, res, next) => {
         return res.status(503).json({ error: 'Authentication is not configured' });
       }
       // Local development fallback
-      return jwt.verify(token, 'dev-secret-change-in-production');
+      const decoded = jwt.verify(token, 'dev-secret-change-in-production');
+      req.user = decoded;
+      return next();
     }
 
     const decoded = jwt.verify(token, secret);
