@@ -123,8 +123,23 @@ export default function QueueMonitor() {
             <Typography variant="body2" color="text.secondary">{t('deliveryActivityHelp')}</Typography>
           </Box>
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" color="error" startIcon={<Trash2 size={16} />} disabled={failedCount <= 0 || loading} onClick={() => action('/queue/failed/clear', t('failedCleared'), 'cleared')}>{t('clearFailed')}</Button>
-            <Button variant="contained" startIcon={<RotateCcw size={16} />} disabled={failedCount <= 0 || loading} onClick={() => action('/queue/failed/retry', t('failedRetried'), 'retried')}>{t('retryFailed')}</Button>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<Trash2 size={16} />}
+              disabled={stats.total <= 0 || loading}
+              onClick={() => action('/campaigns/stats/queue/clear', 'Toate joburile șterse', 'cleared')}
+            >
+              Sterge totul
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<RotateCcw size={16} />}
+              disabled={stats.total <= 0 || loading}
+              onClick={() => action('/campaigns/stats/queue/retry', 'Joburi reîncercate', 'retried')}
+            >
+              Reîncarcă
+            </Button>
           </Stack>
         </Box>
 
