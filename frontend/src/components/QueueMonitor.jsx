@@ -19,6 +19,7 @@ import QueueVisualization from './QueueVisualization';
 import { slideUp, containerVariants } from '../utils/animations';
 
 const emptyStats = { waiting: 0, active: 0, completed: 0, failed: 0, total: 0 };
+const toCount = (value) => Number(value) || 0;
 
 export default function QueueMonitor() {
   const { t } = useLanguage();
@@ -31,11 +32,11 @@ export default function QueueMonitor() {
     try {
       const { data } = await API.get('/queue/stats');
       const combined = {
-        waiting: (data.inMemory?.waiting || 0) + (data.persisted?.waiting || 0),
-        active: (data.inMemory?.active || 0) + (data.persisted?.active || 0),
-        completed: (data.inMemory?.completed || 0) + (data.persisted?.completed || 0),
-        failed: (data.inMemory?.failed || 0) + (data.persisted?.failed || 0),
-        total: data.total || 0
+        waiting: toCount(data.inMemory?.waiting) + toCount(data.persisted?.waiting),
+        active: toCount(data.inMemory?.active) + toCount(data.persisted?.active),
+        completed: toCount(data.inMemory?.completed) + toCount(data.persisted?.completed),
+        failed: toCount(data.inMemory?.failed) + toCount(data.persisted?.failed),
+        total: toCount(data.total)
       };
       setStats(combined);
     } catch (error) {
@@ -76,6 +77,7 @@ export default function QueueMonitor() {
   };
 
   const progress = stats.total ? Math.round((stats.completed / stats.total) * 100) : 0;
+  const failedCount = toCount(stats.failed);
   const cards = [
     { label: t('waiting'), value: stats.waiting, icon: Clock3, tone: 'orange' },
     { label: t('sendingNow'), value: stats.active, icon: Zap, tone: 'blue' },
@@ -121,8 +123,8 @@ export default function QueueMonitor() {
             <Typography variant="body2" color="text.secondary">{t('deliveryActivityHelp')}</Typography>
           </Box>
           <Stack direction="row" spacing={1}>
-            <Button variant="outlined" color="error" startIcon={<Trash2 size={16} />} disabled={!stats.failed || loading} onClick={() => action('/queue/failed/clear', t('failedCleared'), 'cleared')}>{t('clearFailed')}</Button>
-            <Button variant="contained" startIcon={<RotateCcw size={16} />} disabled={!stats.failed || loading} onClick={() => action('/queue/failed/retry', t('failedRetried'), 'retried')}>{t('retryFailed')}</Button>
+            <Button variant="outlined" color="error" startIcon={<Trash2 size={16} />} disabled={failedCount <= 0 || loading} onClick={() => action('/queue/failed/clear', t('failedCleared'), 'cleared')}>{t('clearFailed')}</Button>
+            <Button variant="contained" startIcon={<RotateCcw size={16} />} disabled={failedCount <= 0 || loading} onClick={() => action('/queue/failed/retry', t('failedRetried'), 'retried')}>{t('retryFailed')}</Button>
           </Stack>
         </Box>
 
