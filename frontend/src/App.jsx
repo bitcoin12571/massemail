@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Dashboard from './pages/Dashboard.jsx';
 import Login from './pages/Login.jsx';
+import { initializeCsrfToken } from './services/api.js';
 
 function readStoredUser() {
   if (!localStorage.getItem('authToken')) return null;
@@ -30,6 +31,8 @@ export default function App() {
 
   useEffect(() => {
     clearLegacyBrowserOnlyData();
+    // Initialize CSRF token for security
+    initializeCsrfToken();
     const logout = () => setUser(null);
     window.addEventListener('mailora:logout', logout);
     return () => window.removeEventListener('mailora:logout', logout);

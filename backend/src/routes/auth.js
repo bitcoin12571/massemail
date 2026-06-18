@@ -63,6 +63,44 @@ function issueToken(user) {
   );
 }
 
+/**
+ * @swagger
+ * /auth/register:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password, name]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: Password123!
+ *               name:
+ *                 type: string
+ *                 example: John Doe
+ *     responses:
+ *       201:
+ *         description: User created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token: { type: string }
+ *                 user: { $ref: '#/components/schemas/User' }
+ *       400:
+ *         description: Invalid input or user already exists
+ */
 // Register
 router.post('/register', async (req, res) => {
   if (process.env.VERCEL || process.env.DISABLE_REGISTRATION === 'true') {
@@ -96,6 +134,42 @@ router.post('/register', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /auth/login:
+ *   post:
+ *     summary: Login user and receive JWT token
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *               password:
+ *                 type: string
+ *                 example: Password123!
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token: { type: string }
+ *                 user: { $ref: '#/components/schemas/User' }
+ *       401:
+ *         description: Invalid credentials
+ *       429:
+ *         description: Too many login attempts. Account temporarily locked.
+ */
 // Login
 router.post('/login', async (req, res) => {
   const { key, attempt } = getLoginAttempt(req);
