@@ -40,8 +40,16 @@ export function initializeSentry(app) {
 /**
  * Sentry error handler (should be after all routes)
  * Captures unhandled errors and sends to Sentry
+ * Returns a no-op middleware if Sentry is not initialized
  */
 export function createSentryErrorHandler() {
+  // Only use Sentry error handler if DSN is configured
+  if (!process.env.SENTRY_DSN) {
+    return (err, req, res, next) => {
+      next(err);
+    };
+  }
+
   return Sentry.Handlers.errorHandler();
 }
 
