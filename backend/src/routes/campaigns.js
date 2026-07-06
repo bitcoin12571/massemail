@@ -195,13 +195,13 @@ router.post('/:id/send', emailSendLimiter, campaignSendLimiter, async (req, res)
     await campaign.update({ status: 'sending' });
 
     for (const contact of contacts) {
-      console.log(`[CAMPAIGN SEND] Creating email for ${contact.email}`);
+      logger.debug('CAMPAIGN_SEND', `Creating email for contact ${contact.id}`);
       const email = await Email.create({
         campaignId: campaign.id,
         contactId: contact.id,
         recipientEmail: contact.email
       });
-      console.log(`[CAMPAIGN SEND] Adding to queue: ${email.id}`);
+      logger.debug('CAMPAIGN_SEND', `Added to queue: ${email.id}`);
       await emailQueue.add({ emailId: email.id, campaignId: campaign.id, contactId: contact.id });
     }
 

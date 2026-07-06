@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { Resend } from 'resend';
 import SystemSetting from '../models/SystemSetting.js';
+import logger from './logger.js';
 
 // Validate required environment variables for production
 function validateEmailConfig() {
@@ -90,10 +91,8 @@ export async function initializeEmailService() {
   const envProvider = process.env.EMAIL_PROVIDER;
   const provider = envProvider || stored?.value?.provider || 'preview';
 
-  console.log(`[EMAIL SERVICE] Loading configuration...`);
-  console.log(`[EMAIL SERVICE] .env EMAIL_PROVIDER: ${envProvider}`);
-  console.log(`[EMAIL SERVICE] Stored provider: ${stored?.value?.provider}`);
-  console.log(`[EMAIL SERVICE] Final provider: ${provider}`);
+  logger.debug('EMAIL_SERVICE', 'Loading configuration...');
+  logger.debug('EMAIL_SERVICE', `Provider config: env=${envProvider}, stored=${stored?.value?.provider}`);
 
   settings = {
     ...defaults,
@@ -109,13 +108,7 @@ export async function initializeEmailService() {
     resendApiKey: process.env.RESEND_API_KEY || stored?.value?.resendApiKey || ''
   };
 
-  console.log(`[EMAIL SERVICE] ================================================`);
-  console.log(`[EMAIL SERVICE] Configuration loaded:`);
-  console.log(`[EMAIL SERVICE]   Provider: ${settings.provider}`);
-  console.log(`[EMAIL SERVICE]   User: ${settings.smtpUser}`);
-  console.log(`[EMAIL SERVICE]   From: ${settings.senderEmail}`);
-  console.log(`[EMAIL SERVICE]   Has Password: ${!!settings.smtpPassword}`);
-  console.log(`[EMAIL SERVICE] ================================================`);
+  logger.info('EMAIL_SERVICE', `Configuration loaded: provider=${settings.provider}, hasAuth=${!!settings.smtpUser}, hasPassword=${!!settings.smtpPassword}`);
 
   transporter = createTransport(settings);
   console.log(`Email service initialized (${settings.provider} mode)`);

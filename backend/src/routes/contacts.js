@@ -236,9 +236,8 @@ router.post('/import', contactImportLimiter, async (req, res) => {
 
 router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments', 5), async (req, res) => {
   try {
-    console.log('[SEND-NOW] Request received');
-    console.log('[SEND-NOW] User ID:', req.user?.id);
-    console.log('[SEND-NOW] Body keys:', Object.keys(req.body));
+    logger.debug('SEND-NOW', 'Request received');
+    logger.debug('SEND-NOW', `User: ${req.user?.id}, Body keys: ${Object.keys(req.body).join(', ')}`);
 
     // Minimal logging for speed
     const contactIds = typeof req.body.contactIds === 'string'
@@ -249,21 +248,20 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
       : req.body.recipients;
     const { subject, message } = req.body;
 
-    console.log('[SEND-NOW] Contact IDs:', contactIds);
-    console.log('[SEND-NOW] Subject:', subject);
+    logger.debug('SEND-NOW', `Prepared ${contactIds.length} recipient(s)`);
 
     if (!Array.isArray(contactIds) || contactIds.length === 0) {
-      console.log('[SEND-NOW] Error: No contact IDs');
+      logger.warn('SEND-NOW', 'No contact IDs provided');
       return res.status(400).json({ error: 'Select at least one recipient' });
     }
     if (!subject?.trim() || !message?.trim()) {
-      console.log('[SEND-NOW] Error: Missing subject or message');
+      logger.warn('SEND-NOW', 'Missing subject or message');
       return res.status(400).json({ error: 'Subject and message are required' });
     }
 
     const requestedContactIds = [...new Set(contactIds.filter(Boolean))];
 
-    console.log('[SEND-NOW] Finding contacts...');
+    logger.debug('SEND-NOW', `Finding ${requestedContactIds.length} contact(s)...`);
     let contacts = await Contact.findAll({
       where: {
         id: requestedContactIds,
@@ -272,7 +270,7 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
       }
     });
 
-    console.log('[SEND-NOW] Found contacts:', contacts.length);
+    logger.debug('SEND-NOW', `Found ${contacts.length} contact(s)`);
 
     const resolvedRequestedIds = new Set(contacts.map((contact) => contact.id));
     const contactEmails = new Set(contacts.map((contact) => contact.email.toLowerCase()));
@@ -363,7 +361,8 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
     const results = await Promise.allSettled(
       emailRecords.map(async ({ email, contact }) => {
         try {
-          console.log(`[SEND-NOW] Sending to ${contact.email} with ${attachments.length} attachments`);
+          // Log without exposing email
+          logger.debug('SEND-NOW', `Sending email with ${attachments.length} attachments (contactId: ${contact.id})`);
 
           const result = await sendEmail({
             to: contact.email,
@@ -384,7 +383,7 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
             status: 'failed',
             failureReason: (err.message || String(err)).slice(0, 500)
           });
-          console.error(`Email send error to ${contact.email}:`, err.message);
+          logger.error('SEND-NOW', `Email send failed (contactId: ${contact.id})`, err);
           throw err;
         }
       })
@@ -430,7 +429,7 @@ router.post('/test-send', async (req, res) => {
       return res.status(400).json({ error: 'No clients found in database' });
     }
 
-    console.log(`[TEST-SEND] Testing with client: ${client.email}`);
+    logger.debug('TEST-SEND', `Testing with email client (userId: ${req.user.id})`);
 
     const { sendEmail } = await import('../services/emailService.js');
     const result = await sendEmail({

@@ -40,6 +40,19 @@ const Email = sequelize.define('Email', {
   },
   failureReason: {
     type: DataTypes.TEXT
+  },
+  retryCount: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    comment: 'Number of retry attempts'
+  },
+  lastRetryAt: {
+    type: DataTypes.DATE,
+    comment: 'Timestamp of last retry attempt'
+  },
+  nextRetryAt: {
+    type: DataTypes.DATE,
+    comment: 'When to retry next (exponential backoff)'
   }
 }, {
   timestamps: true,
