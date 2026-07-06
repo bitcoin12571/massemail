@@ -103,8 +103,8 @@ app.use(cors(process.env.VERCEL
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// 4. Apply general rate limiting to all routes
-app.use(generalLimiter);
+// 4. Rate limiting disabled globally - specific routes have their own limits
+// app.use(generalLimiter);
 
 // 5. CSRF token generation (no wrapper - calls next() internally)
 app.use(generateCsrfToken);
