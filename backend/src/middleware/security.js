@@ -32,7 +32,18 @@ async function getRedisClient() {
       await redisClient.connect();
       console.log('✅ Redis CSRF token storage connected');
     } catch (error) {
-      console.warn('Redis connection failed, falling back to in-memory CSRF storage', error.message);
+      const isProduction = process.env.NODE_ENV === 'production';
+      const hasRedisUrl = !!process.env.REDIS_URL;
+
+      if (isProduction && hasRedisUrl) {
+        // In production with explicit Redis config, this is a critical error
+        console.error('🚨 CRITICAL: Redis connection failed in production!', error.message);
+        console.error('CSRF tokens will be lost on server restart.');
+        console.error('Check REDIS_URL configuration:', process.env.REDIS_URL);
+      } else {
+        // Development/fallback scenario - acceptable
+        console.warn('⚠️  Redis connection failed, falling back to in-memory CSRF storage', error.message);
+      }
       // Fallback for local development
       return null;
     }

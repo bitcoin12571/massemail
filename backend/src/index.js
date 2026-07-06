@@ -81,17 +81,14 @@ export function initializeApp() {
   return initializationPromise;
 }
 
-// Middleware
+// Middleware setup
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+
+// 1. Security headers (must be first)
 app.use(securityHeaders);
-app.use(async (req, res, next) => {
-  try {
-    await generateCsrfToken(req, res, next);
-  } catch (error) {
-    next(error);
-  }
-}); // Generate CSRF token for GET requests
+
+// 2. CORS (before body parsing)
 app.use(cors(process.env.VERCEL
   ? { origin: false }
   : {
@@ -99,27 +96,19 @@ app.use(cors(process.env.VERCEL
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
       credentials: false
     }));
+
+// 3. Body parsing (must be before CSRF verification)
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
-app.use(async (req, res, next) => {
-  try {
-    await verifyCsrfToken(req, res, next);
-  } catch (error) {
-    next(error);
-  }
-}); // Verify CSRF token for state-changing requests
 
-app.use(async (req, res, next) => {
-  try {
-    await initializeApp();
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Apply general rate limiting to all routes
+// 4. Apply general rate limiting to all routes
 app.use(generalLimiter);
+
+// 5. CSRF token generation (no wrapper - calls next() internally)
+app.use(generateCsrfToken);
+
+// 6. CSRF token verification (no wrapper - calls next() internally)
+app.use(verifyCsrfToken);
 
 // Routes (no auth)
 app.use('/api/auth', authLimiter, authRoutes);
@@ -160,23 +149,25 @@ app.get('/api/health', (req, res) => {
 });
 
 // Scheduler management endpoints (debug/testing)
-app.post('/api/scheduler/trigger', authMiddleware, async (req, res) => {
+app.post('/api/scheduler/trigger', authMiddleware, async (req, res, next) => {
   try {
     const { manualTriggerScheduler } = await import('./services/schedulerService.js');
     await manualTriggerScheduler();
     res.json({ success: true, message: 'Scheduler triggered manually' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    logger.error('SCHEDULER', 'Failed to trigger scheduler', error);
+    next(error);
   }
 });
 
-app.get('/api/scheduler/status', authMiddleware, async (req, res) => {
+app.get('/api/scheduler/status', authMiddleware, async (req, res, next) => {
   try {
     const { getSchedulerStatus } = await import('./services/schedulerService.js');
     const status = getSchedulerStatus();
     res.json(status);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    logger.error('SCHEDULER', 'Failed to get scheduler status', error);
+    next(error);
   }
 });
 

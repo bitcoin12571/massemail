@@ -1,5 +1,6 @@
 import Session from '../models/Session.js';
 import logger from '../services/logger.js';
+import { Op } from 'sequelize';
 
 // Session timeout: 1 year (effectively infinite/never expires)
 // Users can stay logged in indefinitely - perfect for long-term use!
@@ -74,7 +75,7 @@ export async function cleanupExpiredSessions() {
   try {
     const deleted = await Session.destroy({
       where: {
-        expiresAt: { [require('sequelize').Op.lt]: new Date() }
+        expiresAt: { [Op.lt]: new Date() }
       }
     });
     if (deleted > 0) {
