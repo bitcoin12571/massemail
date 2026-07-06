@@ -8,7 +8,7 @@ import {
   Typography
 } from '@mui/material';
 import { LockKeyhole } from 'lucide-react';
-import API, { getApiErrorMessage } from '../services/api';
+import API, { getApiErrorMessage, initializeCsrfToken } from '../services/api';
 import smartGrowthLogo from '../assets/smart-growth-ai-logo.png';
 import { useLanguage } from '../i18n.jsx';
 
@@ -26,6 +26,8 @@ export default function Login({ onLogin }) {
 
     try {
       const { data } = await API.post('/auth/login', { email, password });
+      // Initialize CSRF token after successful login
+      await initializeCsrfToken();
       onLogin(data.token, data.user);
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, t('signInError')));
