@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../../../email"
+		},
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../frontend"
+		}
+	],
+	"settings": {}
+}

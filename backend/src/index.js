@@ -85,7 +85,7 @@ export function initializeApp() {
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(securityHeaders);
-app.use(generateCsrfToken); // Generate CSRF token for GET requests
+app.use((req, res, next) => generateCsrfToken(req, res, next)); // Generate CSRF token for GET requests
 app.use(cors(process.env.VERCEL
   ? { origin: false }
   : {
@@ -95,7 +95,7 @@ app.use(cors(process.env.VERCEL
     }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
-app.use(verifyCsrfToken); // Verify CSRF token for state-changing requests
+app.use((req, res, next) => verifyCsrfToken(req, res, next)); // Verify CSRF token for state-changing requests
 
 app.use(async (req, res, next) => {
   try {

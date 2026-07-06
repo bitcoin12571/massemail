@@ -1,8 +1,36 @@
 import { randomUUID, timingSafeEqual, randomBytes } from 'node:crypto';
 import crypto from 'node:crypto';
+import { createClient } from 'redis';
 
-const csrfTokens = new Map(); // In-memory store (use Redis in production)
-const CSRF_TOKEN_EXPIRY = 1 * 60 * 60 * 1000; // 1 hour
+// CSRF token expiry: 7 days (604800 seconds) - allows long inactivity without expiration
+const CSRF_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 days in seconds
+let redisClient = null;
+
+// Initialize Redis client for CSRF tokens
+async function getRedisClient() {
+  if (!redisClient) {
+    try {
+      redisClient = createClient({
+        url: process.env.REDIS_URL || 'redis://localhost:6379'
+      });
+
+      redisClient.on('error', (err) => {
+        console.error('Redis Client Error', err);
+        redisClient = null; // Reset on error
+      });
+
+      await redisClient.connect();
+    } catch (error) {
+      console.warn('Redis connection failed, falling back to in-memory CSRF storage', error.message);
+      // Fallback for local development
+      return null;
+    }
+  }
+  return redisClient;
+}
+
+// Fallback in-memory store for development
+const csrfTokensMemory = new Map();
 
 export function securityHeaders(req, res, next) {
   const requestId = req.headers['x-request-id'] || randomUUID();
@@ -24,24 +52,39 @@ export function securityHeaders(req, res, next) {
 
 /**
  * Generate a CSRF token for the client
- * Token is stored server-side with expiry
+ * Token is stored server-side (Redis in production, in-memory fallback) with expiry
  */
-export function generateCsrfToken(req, res, next) {
+export async function generateCsrfToken(req, res, next) {
   if (req.method === 'GET') {
     const token = randomBytes(32).toString('hex');
     const sessionId = req.headers['x-session-id'] || randomUUID();
 
-    csrfTokens.set(token, {
+    const tokenData = {
       sessionId,
       createdAt: Date.now(),
-      expiresAt: Date.now() + CSRF_TOKEN_EXPIRY
-    });
+      expiresAt: Date.now() + (CSRF_TOKEN_EXPIRY * 1000)
+    };
 
-    // Clean up expired tokens
-    for (const [key, value] of csrfTokens.entries()) {
-      if (value.expiresAt < Date.now()) {
-        csrfTokens.delete(key);
+    try {
+      const redis = await getRedisClient();
+      if (redis) {
+        // Store in Redis with TTL
+        await redis.setEx(`csrf:${token}`, CSRF_TOKEN_EXPIRY, JSON.stringify(tokenData));
+      } else {
+        // Fallback: store in memory
+        csrfTokensMemory.set(token, tokenData);
+
+        // Clean up expired tokens in memory
+        for (const [key, value] of csrfTokensMemory.entries()) {
+          if (value.expiresAt < Date.now()) {
+            csrfTokensMemory.delete(key);
+          }
+        }
       }
+    } catch (error) {
+      console.error('Error storing CSRF token:', error);
+      // Fallback to memory if Redis fails
+      csrfTokensMemory.set(token, tokenData);
     }
 
     res.set('X-CSRF-Token', token);
@@ -53,7 +96,7 @@ export function generateCsrfToken(req, res, next) {
 /**
  * Verify CSRF token on state-changing requests (POST, PUT, DELETE, PATCH)
  */
-export function verifyCsrfToken(req, res, next) {
+export async function verifyCsrfToken(req, res, next) {
   // Skip CSRF check for GET requests, webhooks, and public endpoints
   if (req.method === 'GET' || req.path.includes('/webhooks') || req.path.includes('/auth/login')) {
     return next();
@@ -68,7 +111,33 @@ export function verifyCsrfToken(req, res, next) {
     });
   }
 
-  const tokenData = csrfTokens.get(token);
+  let tokenData = null;
+
+  try {
+    const redis = await getRedisClient();
+    if (redis) {
+      // Try to get from Redis
+      const stored = await redis.get(`csrf:${token}`);
+      if (stored) {
+        tokenData = JSON.parse(stored);
+        // Delete after verification (one-time use)
+        await redis.del(`csrf:${token}`);
+      }
+    } else {
+      // Fallback to memory
+      tokenData = csrfTokensMemory.get(token);
+      if (tokenData) {
+        csrfTokensMemory.delete(token);
+      }
+    }
+  } catch (error) {
+    console.error('Error verifying CSRF token:', error);
+    // Try memory as fallback
+    tokenData = csrfTokensMemory.get(token);
+    if (tokenData) {
+      csrfTokensMemory.delete(token);
+    }
+  }
 
   if (!tokenData) {
     return res.status(403).json({
@@ -78,7 +147,6 @@ export function verifyCsrfToken(req, res, next) {
   }
 
   if (tokenData.expiresAt < Date.now()) {
-    csrfTokens.delete(token);
     return res.status(403).json({
       error: 'CSRF token expired',
       code: 'CSRF_TOKEN_EXPIRED'
@@ -94,10 +162,7 @@ export function verifyCsrfToken(req, res, next) {
     });
   }
 
-  // Token is valid - consume it
-  csrfTokens.delete(token);
   req.csrfToken = token;
-
   next();
 }
 
