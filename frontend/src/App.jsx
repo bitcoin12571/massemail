@@ -47,6 +47,8 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('mailoraUser');
+    sessionStorage.removeItem('csrfToken');
+    sessionStorage.removeItem('sessionId');
     setUser(null);
   };
 

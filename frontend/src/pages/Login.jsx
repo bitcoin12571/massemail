@@ -28,6 +28,9 @@ export default function Login({ onLogin }) {
       const { data } = await API.post('/auth/login', { email, password });
       // Save auth token FIRST so it's available for subsequent requests
       onLogin(data.token, data.user);
+      if (data.sessionId) {
+        sessionStorage.setItem('sessionId', data.sessionId);
+      }
       // THEN initialize CSRF token with the authenticated session
       await initializeCsrfToken();
     } catch (requestError) {

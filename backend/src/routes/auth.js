@@ -59,10 +59,58 @@ function issueToken(user) {
   }
 
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, sessionId: user.sessionId },
     secret,
     { expiresIn: process.env.JWT_EXPIRE || '12h' }
   );
+}
+
+async function ensureEnvironmentAdminUser(adminEmail) {
+  const adminUserId = '00000000-0000-4000-8000-000000000001';
+  let user = await User.findOne({ where: { email: adminEmail } });
+
+  if (!user) {
+    user = await User.findByPk(adminUserId);
+  }
+
+  if (!user) {
+    return User.create({
+      id: adminUserId,
+      email: adminEmail,
+      password: randomBytes(32).toString('hex') + 'Aa1!',
+      name: 'Administrator',
+      role: 'admin',
+      active: true
+    });
+  }
+
+  const updates = {};
+  if (user.email !== adminEmail) updates.email = adminEmail;
+  if (user.role !== 'admin') updates.role = 'admin';
+  if (user.name !== 'Administrator') updates.name = 'Administrator';
+  if (!user.active) updates.active = true;
+
+  if (Object.keys(updates).length > 0) {
+    await user.update(updates);
+  }
+
+  return user;
+}
+
+async function createSessionForUser(user, req) {
+  const sessionId = randomBytes(32).toString('hex');
+  const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT_MINUTES, 10) || 525600;
+  const expiresAt = new Date(Date.now() + sessionTimeout * 60 * 1000);
+
+  await Session.create({
+    userId: user.id,
+    sessionId,
+    expiresAt,
+    ipAddress: req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim(),
+    userAgent: req.headers['user-agent']
+  });
+
+  return sessionId;
 }
 
 /**
@@ -198,13 +246,25 @@ router.post('/login', async (req, res) => {
       }
 
       loginAttempts.delete(key);
+      const sessionId = randomBytes(32).toString('hex');
       const user = {
         id: '00000000-0000-4000-8000-000000000001',
         email: adminEmail,
         name: 'Administrator',
-        role: 'admin'
+        role: 'admin',
+        sessionId
       };
-      return res.json({ token: issueToken(user), user });
+
+      return res.json({
+        token: issueToken(user),
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role
+        },
+        sessionId
+      });
     }
 
     if (process.env.VERCEL) {
@@ -257,19 +317,11 @@ router.post('/login', async (req, res) => {
     await user.save();
 
     const token = issueToken(user);
-    const sessionId = randomBytes(32).toString('hex');
-    const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 30;
-    const expiresAt = new Date(Date.now() + sessionTimeout * 60 * 1000);
+    let sessionId = null;
 
     // Create session record
     try {
-      await Session.create({
-        userId: user.id,
-        sessionId,
-        expiresAt,
-        ipAddress: req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim(),
-        userAgent: req.headers['user-agent']
-      });
+      sessionId = await createSessionForUser(user, req);
       await logLogin(user.id, req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim(), true);
     } catch (sessionError) {
       console.error('Session creation error:', sessionError);

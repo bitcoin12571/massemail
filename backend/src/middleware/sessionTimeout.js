@@ -22,6 +22,20 @@ export async function checkSessionTimeout(req, res, next) {
       return next();
     }
 
+    const isEnvironmentAdmin = process.env.ADMIN_EMAIL
+      && req.user.id === '00000000-0000-4000-8000-000000000001';
+
+    if (isEnvironmentAdmin && req.user.sessionId) {
+      if (req.user.sessionId !== sessionId) {
+        return res.status(401).json({
+          error: 'Session not found or expired',
+          code: 'SESSION_EXPIRED'
+        });
+      }
+
+      return next();
+    }
+
     const session = await Session.findOne({
       where: { sessionId, userId: req.user.id, active: true }
     });

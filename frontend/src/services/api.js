@@ -41,7 +41,7 @@ export function getApiErrorMessage(error, fallback = 'Request failed') {
 export async function initializeCsrfToken() {
   try {
     // Generate or retrieve session ID
-    sessionId = sessionId || crypto.randomUUID?.() || `session-${Date.now()}`;
+    sessionId = sessionId || sessionStorage.getItem('sessionId') || crypto.randomUUID?.() || `session-${Date.now()}`;
 
     // Make a GET request to trigger CSRF token generation
     const response = await api.get('/health', {
@@ -114,6 +114,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/')) {
       localStorage.removeItem('authToken');
       localStorage.removeItem('mailoraUser');
+      sessionStorage.removeItem('csrfToken');
+      sessionStorage.removeItem('sessionId');
+      csrfToken = null;
+      sessionId = null;
       window.dispatchEvent(new Event('mailora:logout'));
     }
     return Promise.reject(error);
