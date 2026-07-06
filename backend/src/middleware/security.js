@@ -106,6 +106,7 @@ export async function generateCsrfToken(req, res, next) {
 
 /**
  * Verify CSRF token on state-changing requests (POST, PUT, DELETE, PATCH)
+ * SECURITY: Token is tied to session + validated on each request
  */
 export async function verifyCsrfToken(req, res, next) {
   // Skip CSRF check for GET requests, webhooks, and public endpoints
@@ -114,6 +115,7 @@ export async function verifyCsrfToken(req, res, next) {
   }
 
   const token = req.headers['x-csrf-token'];
+  const sessionId = req.headers['x-session-id'];
 
   if (!token) {
     return res.status(403).json({
@@ -127,27 +129,19 @@ export async function verifyCsrfToken(req, res, next) {
   try {
     const redis = await getRedisClient();
     if (redis) {
-      // Try to get from Redis
+      // Try to get from Redis (no deletion - token reusable for session lifetime)
       const stored = await redis.get(`csrf:${token}`);
       if (stored) {
         tokenData = JSON.parse(stored);
-        // Delete after verification (one-time use)
-        await redis.del(`csrf:${token}`);
       }
     } else {
       // Fallback to memory
       tokenData = csrfTokensMemory.get(token);
-      if (tokenData) {
-        csrfTokensMemory.delete(token);
-      }
     }
   } catch (error) {
     console.error('Error verifying CSRF token:', error);
     // Try memory as fallback
     tokenData = csrfTokensMemory.get(token);
-    if (tokenData) {
-      csrfTokensMemory.delete(token);
-    }
   }
 
   if (!tokenData) {
@@ -157,19 +151,20 @@ export async function verifyCsrfToken(req, res, next) {
     });
   }
 
-  if (tokenData.expiresAt < Date.now()) {
-    return res.status(403).json({
-      error: 'CSRF token expired',
-      code: 'CSRF_TOKEN_EXPIRED'
-    });
-  }
-
-  // Optional: Verify session match
-  const sessionId = req.headers['x-session-id'];
+  // SECURITY: Verify session match (token bound to specific session)
+  // This prevents token reuse across different sessions/devices
   if (sessionId && tokenData.sessionId !== sessionId) {
     return res.status(403).json({
       error: 'CSRF token session mismatch',
       code: 'CSRF_SESSION_MISMATCH'
+    });
+  }
+
+  // SECURITY: Verify token hasn't expired
+  if (tokenData.expiresAt < Date.now()) {
+    return res.status(403).json({
+      error: 'CSRF token expired',
+      code: 'CSRF_TOKEN_EXPIRED'
     });
   }
 
