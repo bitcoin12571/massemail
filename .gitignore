@@ -6,3 +6,24 @@ frontend/dist/
 
 .vercel
 .env*
+
+# Database files (security: never commit real data)
+*.sqlite
+*.sqlite3
+*.db
+
+# Vercel
+.vercel
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

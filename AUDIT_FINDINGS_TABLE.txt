@@ -1,0 +1,281 @@
+═══════════════════════════════════════════════════════════════════════════════════════════════════
+ERROR HANDLING & LOGGING AUDIT - FINDINGS TABLE
+═══════════════════════════════════════════════════════════════════════════════════════════════════
+
+CRITICAL SECURITY ISSUES (Deploy Blocking)
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+ID   FILE                              LINE   ISSUE                             STATUS
+──   ───────────────────────────────   ────   ──────────────────────────────   ───────
+C1   backend/src/middleware/security.js  42   REDIS_URL logged in error       UNFIXED
+     Context: console.error('Check REDIS_URL configuration:', process.env.REDIS_URL);
+     Impact: Credential exposure (contains password)
+     Fix: Remove env var from log message
+
+C2   backend/src/routes/contacts.js     366   Email addresses logged to       UNFIXED
+                                              console (PII)
+     Context: console.log(`[SEND-NOW] Sending to ${contact.email}...`);
+     Impact: PII in stdout, potential log exposure
+     Fix: Log generic "Sending to N recipients" instead
+
+
+HIGH PRIORITY ISSUES (Production Risk)
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+H1   backend/src/routes/contacts.js     113   error.message exposed in       UNFIXED
+                                              HTTP response
+     Context: res.status(500).json({ error: error.message });
+     Impact: Technical details leak (SequelizeError, etc.)
+     Fix: Use generic "Failed to load. Try again."
+
+H2   backend/src/routes/contacts.js   240-256 Email/subject logged to        UNFIXED
+                                              console (10+ lines)
+     Context: console.log('[SEND-NOW] User ID:', req.user?.id);
+     Impact: Multiple PII exposures in single endpoint
+     Fix: Remove all email/subject/userId detailed logs
+
+H3   backend/src/routes/contacts.js     495   Silent email failure           UNFIXED
+     Context: try { await sendConfirmationEmail() } catch { ... continue }
+     Impact: Email failure hidden from audit trail
+     Fix: Log failure with logger.warn()
+
+H4   backend/src/routes/settings.js      27   error.message in response      UNFIXED
+     Context: res.status(400).json({ error: `Connection failed: ${error.message}` });
+     Impact: SMTP errors exposed (hosts, auth types, etc.)
+     Fix: Use generic "Connection test failed" message
+
+H5   backend/src/routes/contacts.js     382   Silent send failure            UNFIXED
+     Context: catch (err) { ... no logging, just db update }
+     Impact: Send failure not logged, audit gap
+     Fix: Add logger.error() before db update
+
+H6   backend/src/services/bulkSender    19-244 Generic re-throws without   UNFIXED
+     Service.js                               logging (5 instances)
+     Context: catch (error) { throw new Error(`Failed: ${error.message}`); }
+     Impact: Lost error context between layers
+     Fix: Add logger.error() before throw
+
+
+MEDIUM PRIORITY ISSUES (Best Practices)
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+M1   backend/src/middleware/errorHandler.js 3  console.error in error      UNFIXED
+                                               handler middleware
+     Context: console.error(`[${req.requestId}] Error:`, err);
+     Impact: Inconsistent logging format (should use logger service)
+     Fix: Use logger.error() instead
+
+M2   backend/src/routes/queue.js         15   console.error not using     UNFIXED
+                                          44   logger (6 instances)
+                                          66
+                                          79
+                                          95
+                                          117
+     Context: console.error('Error fetching queue stats:', error);
+     Impact: No log level control, inconsistent
+     Fix: Use logger.error('QUEUE', ..., error)
+
+M3   backend/src/middleware/rateLimit.js all  Rate limit errors not       UNFIXED
+                                               logged to audit
+     Context: 429 responses sent but not logged
+     Impact: No attack detection, no audit trail
+     Fix: Add rate limit error handler middleware
+
+M4   backend/src/routes/auth.js          327  console.error in session   UNFIXED
+                                               creation catch
+     Context: console.error('Session creation error:', sessionError);
+     Impact: Not using logger service for consistency
+     Fix: Use logger.error('SESSION', ..., sessionError)
+
+M5   backend/src/routes/webhooks.js      72   console.error mixing       UNFIXED
+                                               styles with logger
+     Context: console.error('[WEBHOOK] ❌ Error...');
+     Impact: Inconsistent logging approach
+     Fix: Use logger.error() uniformly
+
+
+INCONSISTENCY PATTERNS (Code Quality)
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+Pattern 1: Mixed Logging Methods
+  - Some routes use logger service
+  - Other routes use console.log/error directly
+  - Result: No unified log level control
+
+Pattern 2: Missing Error Context
+  - Many services throw errors without logging
+  - Routes must catch and log again
+  - Result: Potential gaps, duplicate logging
+
+Pattern 3: Silent Failures
+  - Catch blocks that swallow errors
+  - Continue processing as if successful
+  - Result: Data loss, audit gaps
+
+Pattern 4: Exposed Technical Details
+  - Multiple routes expose error.message
+  - Different error types leak different info
+  - Result: Information disclosure vulnerability
+
+
+LOGGING COVERAGE GAPS
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+Operation                          Logged?    Issue
+───────────────────────────────   ───────    ────────────────────────────
+User login success                YES ✓      Via auditService
+User login failure                PARTIAL    Attempts tracked, not logged to file
+User logout                        YES ✓      Via auditService
+Campaign creation                 PARTIAL    Some console.log, not in logger
+Campaign send                      PARTIAL    console.log, not audit logged
+Email send                         MINIMAL    Only failures recorded
+Email failures                     YES ✓      DB recorded but not consistently logged
+Rate limit violations              NO ✗       No logging at all
+Database errors                    PARTIAL    Swallowed or exposed
+Authentication errors              PARTIAL    Some logged, some silent
+Invalid requests                   NO ✗       No validation error logging
+API operation duration             NO ✗       No timing/performance logs
+
+
+SENSITIVE DATA PATTERNS FOUND
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+Data Type          Found In                 Line(s)    Risk Level
+──────────────     ────────────────────     ────────   ──────────
+Email addresses    contacts.js              240-366    HIGH - PII in stdout
+Subject lines      contacts.js              253        MEDIUM - Content exposure
+User IDs           contacts.js              240        LOW - May be sensitive
+REDIS URL          security.js              42         CRITICAL - Credentials
+SMTP details       settings.js              27         HIGH - Config leakage
+Error stacks       errorHandler.js          28         MEDIUM - Info disclosure
+
+
+ROUTE-BY-ROUTE ANALYSIS
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+Route: /api/auth/login
+  ✓ Login attempts tracked
+  ✓ Rate limited (5 per 15min)
+  ✗ Session creation errors use console.error (line 327)
+  Status: MOSTLY GOOD
+
+Route: /api/auth/register
+  ✓ Generic error responses
+  ✗ May expose validation details
+  Status: ACCEPTABLE
+
+Route: /api/contacts (GET)
+  ✗ error.message directly in response (line 113)
+  Status: NEEDS FIX
+
+Route: /api/contacts/send-now (POST)
+  ✗ 10+ console.log statements with PII (lines 240-366)
+  ✗ Silent email failures (line 495)
+  ✗ No error logging for send failures (line 382)
+  Status: CRITICAL - NEEDS FIX
+
+Route: /api/campaigns (all)
+  ✗ console.log instead of logger
+  ✓ General error handling present
+  Status: NEEDS LOGGING STANDARDIZATION
+
+Route: /api/queue/* (all)
+  ✗ 6 instances of console.error instead of logger
+  Status: NEEDS STANDARDIZATION
+
+Route: /api/settings/email
+  ✗ error.message exposed in response (line 27)
+  Status: NEEDS FIX
+
+Route: /api/webhooks/*
+  ✗ Mixed console.error and logger usage
+  Status: NEEDS STANDARDIZATION
+
+Route: /api/parser/*
+  ✓ Uses logger service consistently
+  Status: GOOD
+
+
+COMPARISON: IMPLEMENTED vs NEEDED
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+Feature                              Implemented  Status    Priority
+─────────────────────────────────   ──────────   ───────   ────────
+Logger service                      YES ✓        EXISTS    Medium
+Log levels (debug/info/warn/error)  YES ✓        EXISTS    High
+Sentry integration                  YES ✓        EXISTS    High
+Error handler middleware            YES ✓        EXISTS    High
+Rate limiter                        YES ✓        EXISTS    High
+
+But Used Inconsistently:
+  - Logger imported but not always used
+  - Error handler present but not always called (uses res.json directly)
+  - Sentry optional (needs DSN config)
+
+Missing:
+  - Error tracking/aggregation setup
+  - Request/response logging middleware
+  - Structured logging format
+  - Performance/timing logs
+  - Audit trail for operations
+  - Metrics (error rates, latency)
+
+
+SEVERITY SUMMARY
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+CRITICAL (Block Production):  2 issues
+HIGH (Fix Before Deploy):     6 issues
+MEDIUM (Fix Soon):           5 issues
+LOW (Improve):               4 patterns
+
+Total Issues: 17 actionable items + 4 pattern improvements
+
+
+ESTIMATED FIX EFFORT
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+Critical Fixes:                 1-2 hours
+High Priority Fixes:            2-3 hours
+Medium Priority Fixes:          1-2 hours
+Testing & Verification:         1-2 hours
+────────────────────────────
+Total:                          5-9 hours
+
+
+FILES NEEDING CHANGES (15 files)
+───────────────────────────────────────────────────────────────────────────────────────────────────
+
+Priority   File                                    Lines      Changes
+────────   ──────────────────────────────────     ────────   ─────────────────────
+CRITICAL   middleware/security.js                 42         Remove env var logging
+HIGH       routes/contacts.js                    113,240-    error response, PII logs,
+                                                 256,366,    silent failures
+                                                 382,495
+
+HIGH       routes/settings.js                     27         Generic error response
+HIGH       services/bulkSenderService.js         19,133,    Add logging before throws
+                                                 221,232,
+                                                 242
+
+MEDIUM     middleware/errorHandler.js             3          Use logger not console
+MEDIUM     routes/queue.js                       15,44,     Replace console.error
+                                                 66,79,     with logger
+                                                 95,117
+
+MEDIUM     routes/auth.js                        327        Use logger for session
+MEDIUM     routes/webhooks.js                    35,72,     Standardize logging
+                                                 106
+
+LOW        routes/campaigns.js                   194-217    Standardize logging
+LOW        routes/parser.js                      various    Already mostly good
+LOW        services/emailService.js              various    Standardize patterns
+LOW        index.js                              N/A        Add rate limit & op
+                                                            logging middleware
+
+
+═══════════════════════════════════════════════════════════════════════════════════════════════════
+Generated: 2026-07-06
+Audit Type: Comprehensive Error Handling & Logging Review
+Status: 17 actionable issues identified, 0 fixed
+═══════════════════════════════════════════════════════════════════════════════════════════════════
