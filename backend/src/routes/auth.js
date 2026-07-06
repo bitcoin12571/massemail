@@ -254,14 +254,6 @@ router.post('/register', async (req, res) => {
  */
 // Login
 router.post('/login', async (req, res) => {
-  const { key, attempt } = await getLoginAttempt(req);
-  if (attempt.count >= MAX_LOGIN_ATTEMPTS) {
-    return res.status(429).json({
-      error: 'Too many login attempts. Try again later.',
-      retryAfter: Math.ceil((attempt.startedAt + LOGIN_WINDOW_MS - Date.now()) / 1000)
-    });
-  }
-
   try {
     const { email, password } = req.body;
     const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
