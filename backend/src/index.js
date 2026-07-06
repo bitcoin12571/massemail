@@ -113,7 +113,7 @@ app.use(generateCsrfToken);
 app.use(verifyCsrfToken);
 
 // Routes (no auth)
-app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/webhooks', webhookLimiter, webhookRoutes);
 
 // Protected routes (with session timeout checking)
