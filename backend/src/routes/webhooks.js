@@ -1,8 +1,10 @@
 import express from 'express';
 import { Op } from 'sequelize';
 import Email from '../models/Email.js';
+import Contact from '../models/Contact.js';
 import { requireWebhookSecret } from '../middleware/security.js';
 import logger from '../services/logger.js';
+import bounceComplaintService from '../services/bounceComplaintService.js';
 
 const router = express.Router();
 router.use(requireWebhookSecret);
@@ -50,26 +52,19 @@ router.post('/bounce', async (req, res) => {
       return res.status(400).json({ error: 'Email address is required' });
     }
 
-    logger.info('WEBHOOK', `Bounce notification for ${email}: ${bounceType}`);
+    logger.info('WEBHOOK_BOUNCE', `Bounce notification for ${email}: ${bounceType}`);
 
-    // Update email records for this recipient
-    const failureReason = `${bounceType || 'hard'} bounce${reason ? ': ' + reason : ''}`;
-
-    const updated = await Email.update(
-      {
-        status: 'bounced',
-        failureReason: failureReason.substring(0, 500)
-      },
-      {
-        where: { recipientEmail: email, status: { [Op.notIn]: ['bounced', 'sent', 'opened', 'clicked'] } }
-      }
+    // Use bounce complaint service to handle bounce
+    const result = await bounceComplaintService.recordBounce(
+      email,
+      bounceType || 'unknown',
+      reason || '',
+      provider || 'unknown'
     );
 
-    logger.info('WEBHOOK', `Updated ${updated[0]} email record(s) to bounced status`);
-
-    res.json({ success: true, updated: updated[0] });
+    res.json(result);
   } catch (error) {
-    console.error('[WEBHOOK] ❌ Error processing bounce:', error);
+    logger.error('WEBHOOK_BOUNCE', `Error processing bounce for ${email}`, error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -80,30 +75,24 @@ router.post('/bounce', async (req, res) => {
  */
 router.post('/complaint', async (req, res) => {
   try {
-    const { email, complaintType } = req.body;
+    const { email, complaintType, reason } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: 'Email address is required' });
     }
 
-    logger.info('WEBHOOK', `Complaint for ${email}: ${complaintType || 'spam'}`);
+    logger.info('WEBHOOK_COMPLAINT', `Complaint for ${email}: ${complaintType || 'spam'}`);
 
-    // Mark as unsubscribed or complained
-    const updated = await Email.update(
-      {
-        status: 'unsubscribed',
-        failureReason: `${complaintType || 'spam'} complaint`
-      },
-      {
-        where: { recipientEmail: email }
-      }
+    // Use bounce complaint service to handle complaint
+    const result = await bounceComplaintService.recordComplaint(
+      email,
+      complaintType || 'spam',
+      reason || ''
     );
 
-    logger.info('WEBHOOK', `Marked ${updated[0]} email(s) as unsubscribed`);
-
-    res.json({ success: true, updated: updated[0] });
+    res.json(result);
   } catch (error) {
-    logger.error('WEBHOOK_COMPLAINT', 'Error processing complaint', error);
+    logger.error('WEBHOOK_COMPLAINT', `Error processing complaint for ${email}`, error);
     res.status(500).json({ error: error.message });
   }
 });
