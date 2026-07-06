@@ -64,8 +64,10 @@ export function initializeApp() {
       await sequelize.authenticate();
       logger.info('DB', 'Database connected');
 
-      await sequelize.sync({ force: false, alter: false });
-      logger.info('DB', 'Models synced');
+      // Note: We use migrations instead of sync() to manage schema changes
+      // sync() is disabled to avoid index conflicts with migrations
+      // If needed, migrations can be run via: npm run migrate:run
+      logger.info('DB', 'Using migrations for schema management (sync disabled)');
 
       await initializeEmailService();
 

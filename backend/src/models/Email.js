@@ -53,13 +53,33 @@ const Email = sequelize.define('Email', {
   nextRetryAt: {
     type: DataTypes.DATE,
     comment: 'When to retry next (exponential backoff)'
+  },
+  bounceType: {
+    type: DataTypes.STRING,
+    comment: 'soft, hard, or unknown'
+  },
+  bouncedAt: {
+    type: DataTypes.DATE,
+    comment: 'When bounce occurred'
+  },
+  complaintType: {
+    type: DataTypes.STRING,
+    comment: 'spam, unsolicited, or other'
+  },
+  complainedAt: {
+    type: DataTypes.DATE,
+    comment: 'When complaint occurred'
   }
 }, {
   timestamps: true,
   indexes: [
     { fields: ['campaignId'] },
     { fields: ['contactId'] },
-    { fields: ['status'] }
+    { fields: ['status'] },
+    { fields: ['nextRetryAt'] },
+    { fields: ['sentAt'] },
+    { fields: ['bounceType', 'bouncedAt'] },
+    { fields: ['complaintType', 'complainedAt'] }
   ]
 });
 
