@@ -1,15 +1,38 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { createHash, timingSafeEqual, randomBytes } from 'node:crypto';
+import { createClient } from 'redis';
 import User from '../models/User.js';
-import Session from '../models/Session.js';
 import { validatePasswordStrength } from '../utils/passwordValidator.js';
 import { logLogin, logLogout } from '../services/auditService.js';
+import logger from '../services/logger.js';
 
 const router = express.Router();
-const loginAttempts = new Map();
+let redisClient = null;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
+
+// Get Redis client for persistent login attempt tracking
+async function getRedisClient() {
+  if (!redisClient) {
+    try {
+      let redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+      if (redisUrl.startsWith('redis://') && redisUrl.includes('upstash.io')) {
+        redisUrl = redisUrl.replace('redis://', 'rediss://');
+      }
+      redisClient = createClient({ url: redisUrl });
+      redisClient.on('error', (err) => {
+        logger.error('AUTH', 'Redis error', err);
+        redisClient = null;
+      });
+      await redisClient.connect();
+    } catch (error) {
+      logger.warn('AUTH', 'Redis unavailable, using in-memory fallback for login attempts');
+      return null;
+    }
+  }
+  return redisClient;
+}
 
 function getJwtSecret() {
   const secret = process.env.JWT_SECRET;
@@ -36,18 +59,42 @@ function secureEqual(left = '', right = '') {
   return timingSafeEqual(leftHash, rightHash);
 }
 
-function getLoginAttempt(req) {
-  const key = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
-  const now = Date.now();
-  const current = loginAttempts.get(key);
+async function getLoginAttempt(req) {
+  const ipKey = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+  const redisKey = `login_attempts:${ipKey}`;
+  const redis = await getRedisClient();
 
-  if (!current || now - current.startedAt > LOGIN_WINDOW_MS) {
-    const next = { count: 0, startedAt: now };
-    loginAttempts.set(key, next);
-    return { key, attempt: next };
+  if (!redis) {
+    // Fallback: in-memory Map (single server only)
+    const key = ipKey;
+    const now = Date.now();
+    if (!req.app.loginAttempts) req.app.loginAttempts = new Map();
+    const current = req.app.loginAttempts.get(key);
+
+    if (!current || now - current.startedAt > LOGIN_WINDOW_MS) {
+      const next = { count: 0, startedAt: now };
+      req.app.loginAttempts.set(key, next);
+      return { key: redisKey, attempt: next };
+    }
+    return { key: redisKey, attempt: current };
   }
 
-  return { key, attempt: current };
+  try {
+    const existing = await redis.get(redisKey);
+    const current = existing ? JSON.parse(existing) : null;
+
+    if (!current) {
+      const next = { count: 0, startedAt: Date.now() };
+      await redis.setEx(redisKey, Math.ceil(LOGIN_WINDOW_MS / 1000), JSON.stringify(next));
+      return { key: redisKey, attempt: next };
+    }
+
+    return { key: redisKey, attempt: current };
+  } catch (error) {
+    logger.error('AUTH', 'Error getting login attempts from Redis', error);
+    // Graceful fallback
+    return { key: redisKey, attempt: { count: 0 } };
+  }
 }
 
 function issueToken(user) {
@@ -97,21 +144,6 @@ async function ensureEnvironmentAdminUser(adminEmail) {
   return user;
 }
 
-async function createSessionForUser(user, req) {
-  const sessionId = randomBytes(32).toString('hex');
-  const sessionTimeout = parseInt(process.env.SESSION_TIMEOUT_MINUTES, 10) || 525600;
-  const expiresAt = new Date(Date.now() + sessionTimeout * 60 * 1000);
-
-  await Session.create({
-    userId: user.id,
-    sessionId,
-    expiresAt,
-    ipAddress: req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim(),
-    userAgent: req.headers['user-agent']
-  });
-
-  return sessionId;
-}
 
 /**
  * @swagger
@@ -222,7 +254,7 @@ router.post('/register', async (req, res) => {
  */
 // Login
 router.post('/login', async (req, res) => {
-  const { key, attempt } = getLoginAttempt(req);
+  const { key, attempt } = await getLoginAttempt(req);
   if (attempt.count >= MAX_LOGIN_ATTEMPTS) {
     return res.status(429).json({
       error: 'Too many login attempts. Try again later.',
@@ -235,6 +267,7 @@ router.post('/login', async (req, res) => {
     const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
     const adminPassword = process.env.ADMIN_PASSWORD;
 
+    // Admin login via environment variables
     if (adminEmail && adminPassword) {
       const normalizedEmail = email?.trim().toLowerCase() || '';
       const valid = secureEqual(normalizedEmail, adminEmail)
@@ -242,17 +275,23 @@ router.post('/login', async (req, res) => {
 
       if (!valid) {
         attempt.count += 1;
+        const redis = await getRedisClient();
+        if (redis) {
+          try {
+            await redis.setEx(key, Math.ceil(LOGIN_WINDOW_MS / 1000), JSON.stringify({ count: attempt.count + 1, startedAt: attempt.startedAt }));
+          } catch (err) {
+            logger.warn('AUTH', 'Failed to update Redis attempt counter');
+          }
+        }
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
-      loginAttempts.delete(key);
-      const sessionId = randomBytes(32).toString('hex');
+      logger.info('AUTH', 'Admin login successful');
       const user = {
         id: '00000000-0000-4000-8000-000000000001',
         email: adminEmail,
         name: 'Administrator',
-        role: 'admin',
-        sessionId
+        role: 'admin'
       };
 
       return res.json({
@@ -262,8 +301,7 @@ router.post('/login', async (req, res) => {
           email: user.email,
           name: user.name,
           role: user.role
-        },
-        sessionId
+        }
       });
     }
 
@@ -292,17 +330,32 @@ router.post('/login', async (req, res) => {
 
     if (!user) {
       attempt.count += 1;
+      const redis = await getRedisClient();
+      if (redis) {
+        try {
+          await redis.setEx(key, Math.ceil(LOGIN_WINDOW_MS / 1000), JSON.stringify({ count: attempt.count + 1, startedAt: attempt.startedAt }));
+        } catch (err) {
+          logger.warn('AUTH', 'Failed to update Redis attempt counter');
+        }
+      }
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
       attempt.count += 1;
+      const redis = await getRedisClient();
+      if (redis) {
+        try {
+          await redis.setEx(key, Math.ceil(LOGIN_WINDOW_MS / 1000), JSON.stringify({ count: attempt.count + 1, startedAt: attempt.startedAt }));
+        } catch (err) {
+          logger.warn('AUTH', 'Failed to update Redis attempt counter');
+        }
+      }
 
       // Increment failed login attempts and lock if necessary
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
       if (user.failedLoginAttempts >= 5) {
-        // Lock account for 15 minutes
         user.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
       }
       await user.save();
@@ -311,25 +364,23 @@ router.post('/login', async (req, res) => {
     }
 
     // Successful login - reset attempt counters
-    loginAttempts.delete(key);
     user.failedLoginAttempts = 0;
     user.lockedUntil = null;
     await user.save();
 
     const token = issueToken(user);
-    let sessionId = null;
 
-    // Create session record
     try {
-      sessionId = await createSessionForUser(user, req);
       await logLogin(user.id, req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim(), true);
-    } catch (sessionError) {
-      console.error('Session creation error:', sessionError);
-      // Don't fail login if session creation fails
+    } catch (auditError) {
+      logger.warn('AUTH', 'Failed to log login event', auditError);
+      // Don't fail login if audit logging fails
     }
 
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role }, sessionId });
+    logger.info('AUTH', `User ${user.id} logged in successfully`);
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
   } catch (error) {
+    logger.error('AUTH', 'Login error', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -337,19 +388,20 @@ router.post('/login', async (req, res) => {
 // Logout
 router.post('/logout', async (req, res) => {
   try {
-    const sessionId = req.headers['x-session-id'];
     const userId = req.user?.id;
 
-    if (sessionId && userId) {
-      await Session.update(
-        { active: false },
-        { where: { sessionId, userId } }
-      );
-      await logLogout(userId, req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim());
+    if (userId) {
+      try {
+        await logLogout(userId, req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim());
+      } catch (auditError) {
+        logger.warn('AUTH', 'Failed to log logout event', auditError);
+      }
+      logger.info('AUTH', `User ${userId} logged out`);
     }
 
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
+    logger.error('AUTH', 'Logout error', error);
     res.status(500).json({ error: error.message });
   }
 });
