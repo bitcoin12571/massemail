@@ -266,15 +266,6 @@ router.post('/login', async (req, res) => {
         && secureEqual(password || '', adminPassword);
 
       if (!valid) {
-        attempt.count += 1;
-        const redis = await getRedisClient();
-        if (redis) {
-          try {
-            await redis.setEx(key, Math.ceil(LOGIN_WINDOW_MS / 1000), JSON.stringify({ count: attempt.count + 1, startedAt: attempt.startedAt }));
-          } catch (err) {
-            logger.warn('AUTH', 'Failed to update Redis attempt counter');
-          }
-        }
         return res.status(401).json({ error: 'Invalid credentials' });
       }
 
@@ -321,30 +312,11 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user) {
-      attempt.count += 1;
-      const redis = await getRedisClient();
-      if (redis) {
-        try {
-          await redis.setEx(key, Math.ceil(LOGIN_WINDOW_MS / 1000), JSON.stringify({ count: attempt.count + 1, startedAt: attempt.startedAt }));
-        } catch (err) {
-          logger.warn('AUTH', 'Failed to update Redis attempt counter');
-        }
-      }
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const isPasswordValid = await user.comparePassword(password);
     if (!isPasswordValid) {
-      attempt.count += 1;
-      const redis = await getRedisClient();
-      if (redis) {
-        try {
-          await redis.setEx(key, Math.ceil(LOGIN_WINDOW_MS / 1000), JSON.stringify({ count: attempt.count + 1, startedAt: attempt.startedAt }));
-        } catch (err) {
-          logger.warn('AUTH', 'Failed to update Redis attempt counter');
-        }
-      }
-
       // Increment failed login attempts and lock if necessary
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
       if (user.failedLoginAttempts >= 5) {
