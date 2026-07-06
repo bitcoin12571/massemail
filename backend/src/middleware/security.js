@@ -10,8 +10,17 @@ let redisClient = null;
 async function getRedisClient() {
   if (!redisClient) {
     try {
+      // Support both redis:// and rediss:// protocols
+      // Upstash uses rediss:// for TLS, but accepts redis:// and auto-upgrades
+      let redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+
+      // If it's a Upstash URL with redis://, convert to rediss://
+      if (redisUrl.startsWith('redis://') && redisUrl.includes('upstash.io')) {
+        redisUrl = redisUrl.replace('redis://', 'rediss://');
+      }
+
       redisClient = createClient({
-        url: process.env.REDIS_URL || 'redis://localhost:6379'
+        url: redisUrl
       });
 
       redisClient.on('error', (err) => {
@@ -20,6 +29,7 @@ async function getRedisClient() {
       });
 
       await redisClient.connect();
+      console.log('✅ Redis CSRF token storage connected');
     } catch (error) {
       console.warn('Redis connection failed, falling back to in-memory CSRF storage', error.message);
       // Fallback for local development
