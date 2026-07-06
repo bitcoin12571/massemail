@@ -41,7 +41,7 @@ export function getApiErrorMessage(error, fallback = 'Request failed') {
 export async function initializeCsrfToken() {
   try {
     // Generate or retrieve session ID
-    sessionId = sessionId || sessionStorage.getItem('sessionId') || crypto.randomUUID?.() || `session-${Date.now()}`;
+    sessionId = sessionStorage.getItem('sessionId') || sessionId || crypto.randomUUID?.() || `session-${Date.now()}`;
 
     // Make a GET request to trigger CSRF token generation
     const response = await api.get('/health', {
@@ -78,8 +78,11 @@ export function getCsrfToken() {
  * Get current session ID
  */
 export function getSessionId() {
-  if (!sessionId) {
-    sessionId = sessionStorage.getItem('sessionId');
+  const storedSessionId = sessionStorage.getItem('sessionId');
+  if (storedSessionId && storedSessionId !== sessionId) {
+    sessionId = storedSessionId;
+  } else if (!sessionId) {
+    sessionId = storedSessionId;
   }
   return sessionId;
 }

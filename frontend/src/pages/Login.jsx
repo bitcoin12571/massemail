@@ -29,6 +29,7 @@ export default function Login({ onLogin }) {
       // Save auth token FIRST so it's available for subsequent requests
       onLogin(data.token, data.user);
       if (data.sessionId) {
+        sessionStorage.removeItem('csrfToken');
         sessionStorage.setItem('sessionId', data.sessionId);
       }
       // THEN initialize CSRF token with the authenticated session
