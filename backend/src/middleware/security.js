@@ -2,8 +2,9 @@ import { randomUUID, timingSafeEqual, randomBytes } from 'node:crypto';
 import crypto from 'node:crypto';
 import { createClient } from 'redis';
 
-// CSRF token expiry: 7 days (604800 seconds) - allows long inactivity without expiration
-const CSRF_TOKEN_EXPIRY = 7 * 24 * 60 * 60; // 7 days in seconds
+// CSRF token expiry: 1 year (31536000 seconds) - effectively infinite/never expires
+// Users never need to refresh tokens, perfect for long-term stability
+const CSRF_TOKEN_EXPIRY = 365 * 24 * 60 * 60; // 365 days in seconds (1 year)
 let redisClient = null;
 
 // Initialize Redis client for CSRF tokens

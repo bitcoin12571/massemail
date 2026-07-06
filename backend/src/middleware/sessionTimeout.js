@@ -1,9 +1,10 @@
 import Session from '../models/Session.js';
 import logger from '../services/logger.js';
 
-// Session timeout: 7 days inactivity (matches CSRF token expiry for consistency)
-// Users can stay logged in for 2 weeks without interaction!
-const SESSION_TIMEOUT_MS = (parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 10080) * 60 * 1000; // 10080 minutes = 7 days
+// Session timeout: 1 year (effectively infinite/never expires)
+// Users can stay logged in indefinitely - perfect for long-term use!
+// Can be overridden with SESSION_TIMEOUT_MINUTES env var if needed
+const SESSION_TIMEOUT_MS = (parseInt(process.env.SESSION_TIMEOUT_MINUTES) || 525600) * 60 * 1000; // 525600 minutes = 365 days
 
 /**
  * Middleware to check session expiry and update lastActivity
