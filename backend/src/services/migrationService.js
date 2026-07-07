@@ -60,7 +60,7 @@ async function ensureCampaignsColumns() {
   try {
     const table = 'Campaigns';
 
-    const columns = ['scheduledAt', 'sentAt'];
+    const columns = ['scheduledAt', 'sentAt', 'attachments'];
 
     for (const column of columns) {
       try {
@@ -68,10 +68,20 @@ async function ensureCampaignsColumns() {
         if (!describeTable[column]) {
           logger.info('SCHEMA', `Adding missing column: ${table}.${column}`);
 
-          await sequelize.queryInterface.addColumn(table, column, {
+          let columnDef = {
             type: sequelize.Sequelize.DATE,
             allowNull: true
-          });
+          };
+
+          if (column === 'attachments') {
+            columnDef = {
+              type: sequelize.Sequelize.JSON,
+              defaultValue: [],
+              allowNull: true
+            };
+          }
+
+          await sequelize.queryInterface.addColumn(table, column, columnDef);
           logger.info('SCHEMA', `✓ Added: ${table}.${column}`);
         }
       } catch (err) {
@@ -80,6 +90,38 @@ async function ensureCampaignsColumns() {
     }
   } catch (err) {
     logger.warn('SCHEMA', 'Campaigns table check failed:', err.message);
+  }
+}
+
+/**
+ * Ensure all required columns exist in the BulkCampaign table
+ */
+async function ensureBulkCampaignColumns() {
+  try {
+    const table = 'BulkCampaigns';
+
+    const columns = ['attachments'];
+
+    for (const column of columns) {
+      try {
+        const describeTable = await sequelize.queryInterface.describeTable(table);
+        if (!describeTable[column]) {
+          logger.info('SCHEMA', `Adding missing column: ${table}.${column}`);
+
+          await sequelize.queryInterface.addColumn(table, column, {
+            type: sequelize.Sequelize.JSON,
+            defaultValue: [],
+            allowNull: true,
+            comment: 'Array of attachments in base64 format'
+          });
+          logger.info('SCHEMA', `✓ Added: ${table}.${column}`);
+        }
+      } catch (err) {
+        logger.warn('SCHEMA', `Could not add ${table}.${column}:`, err.message);
+      }
+    }
+  } catch (err) {
+    logger.warn('SCHEMA', 'BulkCampaign table check failed:', err.message);
   }
 }
 
@@ -145,6 +187,7 @@ export async function runPendingMigrations() {
     // Ensure all required columns exist
     await ensureContactsColumns();
     await ensureCampaignsColumns();
+    await ensureBulkCampaignColumns();
     await ensureEmailsColumns();
 
     logger.info('SCHEMA', 'Schema initialization completed');
