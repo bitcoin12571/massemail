@@ -1,108 +1,155 @@
 /**
- * Migration Service
- * Runs pending migrations on startup to ensure schema is up-to-date
+ * Schema Initialization Service
+ * Ensures all required columns exist in the database
+ * More reliable than tracking migrations on Vercel
  */
 
 import { sequelize } from '../config/database.js';
 import logger from './logger.js';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readdir } from 'node:fs/promises';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const migrationsPath = path.resolve(__dirname, '../migrations');
 
 /**
- * Run pending migrations on startup
- * This ensures the database schema is always up-to-date
- * Works in development (SQLite) and production (PostgreSQL)
+ * Ensure all required columns exist in the Contacts table
+ */
+async function ensureContactsColumns() {
+  try {
+    const isPostgres = sequelize.options.dialect === 'postgres';
+    const table = 'Contacts';
+
+    const columns = [
+      'bounceCount',
+      'lastBounceAt',
+      'complaintCount',
+      'lastComplaintAt',
+      'sendCount',
+      'lastSentAt'
+    ];
+
+    for (const column of columns) {
+      try {
+        const describeTable = await sequelize.queryInterface.describeTable(table);
+        if (!describeTable[column]) {
+          logger.info('SCHEMA', `Adding missing column: ${table}.${column}`);
+
+          const columnDef = {
+            type: sequelize.Sequelize.INTEGER,
+            defaultValue: 0,
+            allowNull: true
+          };
+
+          if (column.includes('At')) {
+            columnDef.type = sequelize.Sequelize.DATE;
+            columnDef.defaultValue = null;
+          }
+
+          await sequelize.queryInterface.addColumn(table, column, columnDef);
+          logger.info('SCHEMA', `✓ Added: ${table}.${column}`);
+        }
+      } catch (err) {
+        logger.warn('SCHEMA', `Could not add ${table}.${column}:`, err.message);
+      }
+    }
+  } catch (err) {
+    logger.warn('SCHEMA', 'Contacts table check failed:', err.message);
+  }
+}
+
+/**
+ * Ensure all required columns exist in the Campaigns table
+ */
+async function ensureCampaignsColumns() {
+  try {
+    const table = 'Campaigns';
+
+    const columns = ['scheduledAt', 'sentAt'];
+
+    for (const column of columns) {
+      try {
+        const describeTable = await sequelize.queryInterface.describeTable(table);
+        if (!describeTable[column]) {
+          logger.info('SCHEMA', `Adding missing column: ${table}.${column}`);
+
+          await sequelize.queryInterface.addColumn(table, column, {
+            type: sequelize.Sequelize.DATE,
+            allowNull: true
+          });
+          logger.info('SCHEMA', `✓ Added: ${table}.${column}`);
+        }
+      } catch (err) {
+        logger.warn('SCHEMA', `Could not add ${table}.${column}:`, err.message);
+      }
+    }
+  } catch (err) {
+    logger.warn('SCHEMA', 'Campaigns table check failed:', err.message);
+  }
+}
+
+/**
+ * Ensure all required columns exist in the Emails table
+ */
+async function ensureEmailsColumns() {
+  try {
+    const table = 'Emails';
+
+    const columns = [
+      'retryCount',
+      'lastRetryAt',
+      'nextRetryAt',
+      'bounceType',
+      'bouncedAt',
+      'complaintType',
+      'complainedAt'
+    ];
+
+    for (const column of columns) {
+      try {
+        const describeTable = await sequelize.queryInterface.describeTable(table);
+        if (!describeTable[column]) {
+          logger.info('SCHEMA', `Adding missing column: ${table}.${column}`);
+
+          let columnDef = {
+            type: sequelize.Sequelize.STRING,
+            allowNull: true
+          };
+
+          if (column === 'retryCount') {
+            columnDef = {
+              type: sequelize.Sequelize.INTEGER,
+              defaultValue: 0
+            };
+          } else if (column.includes('At')) {
+            columnDef.type = sequelize.Sequelize.DATE;
+          } else if (column.includes('Type')) {
+            columnDef.type = sequelize.Sequelize.STRING;
+          }
+
+          await sequelize.queryInterface.addColumn(table, column, columnDef);
+          logger.info('SCHEMA', `✓ Added: ${table}.${column}`);
+        }
+      } catch (err) {
+        logger.warn('SCHEMA', `Could not add ${table}.${column}:`, err.message);
+      }
+    }
+  } catch (err) {
+    logger.warn('SCHEMA', 'Emails table check failed:', err.message);
+  }
+}
+
+/**
+ * Initialize schema on startup
+ * Ensures all required columns exist in the database
  */
 export async function runPendingMigrations() {
   try {
-    logger.info('MIGRATION', 'Checking for pending migrations...');
+    logger.info('SCHEMA', 'Initializing database schema...');
 
-    // Get all migration files
-    const migrationFiles = await readdir(migrationsPath);
-    const migrations = migrationFiles
-      .filter(f => f.endsWith('.js') && !f.startsWith('.'))
-      .sort();
+    // Ensure all required columns exist
+    await ensureContactsColumns();
+    await ensureCampaignsColumns();
+    await ensureEmailsColumns();
 
-    if (migrations.length === 0) {
-      logger.info('MIGRATION', 'No migrations found');
-      return;
-    }
-
-    logger.info('MIGRATION', `Found ${migrations.length} migration files`);
-
-    // Create SequelizeMeta table if it doesn't exist
-    const sequelizeMetaSQL = sequelize.options.dialect === 'sqlite'
-      ? `CREATE TABLE IF NOT EXISTS SequelizeMeta (name VARCHAR(255) PRIMARY KEY)`
-      : `CREATE TABLE IF NOT EXISTS "SequelizeMeta" (name VARCHAR(255) PRIMARY KEY)`;
-
-    await sequelize.query(sequelizeMetaSQL);
-
-    // For each migration file, check if it's been run
-    for (const migrationFile of migrations) {
-      const migrationPath = path.join(migrationsPath, migrationFile);
-      const migrationName = migrationFile.replace('.js', '');
-
-      try {
-        // Check if already run
-        const tableName = sequelize.options.dialect === 'sqlite' ? 'SequelizeMeta' : '"SequelizeMeta"';
-        const selectSQL = sequelize.options.dialect === 'sqlite'
-          ? `SELECT * FROM ${tableName} WHERE name = ?`
-          : `SELECT * FROM ${tableName} WHERE name = $1`;
-
-        const result = await sequelize.query(
-          selectSQL,
-          {
-            replacements: [migrationName],
-            type: 'SELECT'
-          }
-        );
-
-        if (result.length > 0) {
-          logger.info('MIGRATION', `✓ Already run: ${migrationName}`);
-          continue;
-        }
-
-        // Run the migration
-        logger.info('MIGRATION', `Running: ${migrationName}`);
-        const transaction = await sequelize.transaction();
-
-        try {
-          const migration = await import(`file://${migrationPath}`);
-          await migration.up(sequelize.queryInterface, sequelize.Sequelize);
-
-          // Record that migration was run
-          const insertSQL = sequelize.options.dialect === 'sqlite'
-            ? `INSERT INTO SequelizeMeta (name) VALUES (?)`
-            : `INSERT INTO "SequelizeMeta" (name) VALUES ($1)`;
-
-          await sequelize.query(
-            insertSQL,
-            {
-              replacements: [migrationName],
-              transaction
-            }
-          );
-
-          await transaction.commit();
-          logger.info('MIGRATION', `✓ Completed: ${migrationName}`);
-        } catch (error) {
-          await transaction.rollback();
-          logger.error('MIGRATION', `✗ Failed: ${migrationName}`, error.message);
-          // Continue with next migration instead of throwing
-        }
-      } catch (error) {
-        logger.warn('MIGRATION', `Could not process ${migrationFile}:`, error.message);
-        // Continue with next migration
-      }
-    }
-
-    logger.info('MIGRATION', 'Migration check completed');
+    logger.info('SCHEMA', 'Schema initialization completed');
   } catch (error) {
-    logger.warn('MIGRATION', 'Migration service error (app will continue):', error.message);
-    // Don't throw - allow app to start even if migrations have issues
+    logger.warn('SCHEMA', 'Schema initialization error (app will continue):', error.message);
+    // Don't throw - allow app to start even if schema init has issues
   }
 }
