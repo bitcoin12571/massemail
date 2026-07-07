@@ -1,1 +1,17 @@
-{"permissions":{"allow":["Bash(git *)"]}}
+{
+    "permissions": {
+      "bash": [
+        "git rm --cached",
+        "git add",
+        "git commit"
+      ]
+    }
+  }
+
+  
+
+
+
+
+
+  
