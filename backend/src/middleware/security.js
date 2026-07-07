@@ -145,7 +145,7 @@ export async function generateCsrfToken(req, res, next) {
 
 /**
  * Verify CSRF token on state-changing requests (POST, PUT, DELETE, PATCH)
- * SECURITY: Token is tied to session + validated on each request
+ * SECURITY: Token is validated on each request
  */
 export async function verifyCsrfToken(req, res, next) {
   // Skip CSRF check for GET requests, webhooks, and public endpoints
@@ -153,8 +153,7 @@ export async function verifyCsrfToken(req, res, next) {
     return next();
   }
 
-  const token = req.headers['x-csrf-token'];
-  const sessionId = req.headers['x-session-id'];
+  const token = req.headers['x-csrf-token'] || req.body?.csrfToken;
 
   if (!token) {
     return res.status(403).json({
@@ -187,15 +186,6 @@ export async function verifyCsrfToken(req, res, next) {
     return res.status(403).json({
       error: 'Invalid CSRF token',
       code: 'CSRF_TOKEN_INVALID'
-    });
-  }
-
-  // SECURITY: Verify session match (token bound to specific session)
-  // This prevents token reuse across different sessions/devices
-  if (sessionId && tokenData.sessionId !== sessionId) {
-    return res.status(403).json({
-      error: 'CSRF token session mismatch',
-      code: 'CSRF_SESSION_MISMATCH'
     });
   }
 
