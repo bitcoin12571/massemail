@@ -7,13 +7,28 @@ import { createClient } from 'redis';
 const CSRF_TOKEN_EXPIRY = 365 * 24 * 60 * 60; // 365 days in seconds (1 year)
 let redisClient = null;
 
-// Initialize Redis client for CSRF tokens
+// Initialize Redis client for CSRF tokens with timeout
+let redisInitialized = false;
+let redisInitializing = false;
+
 async function getRedisClient() {
-  if (!redisClient) {
+  if (redisClient || !redisInitialized) return redisClient;
+  if (redisInitializing) return null; // Prevent concurrent init attempts
+
+  if (!redisInitialized && !redisInitializing) {
+    redisInitializing = true;
     try {
+      // Only attempt Redis if explicitly configured
+      const hasRedisUrl = !!process.env.REDIS_URL || !!process.env.UPSTASH_REDIS_REST_URL;
+      if (!hasRedisUrl) {
+        console.warn('⚠️  No Redis URL configured, using in-memory CSRF storage (development mode)');
+        redisInitialized = true;
+        redisInitializing = false;
+        return null;
+      }
+
       // Support both redis:// and rediss:// protocols
-      // Upstash uses rediss:// for TLS, but accepts redis:// and auto-upgrades
-      let redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+      let redisUrl = process.env.REDIS_URL || process.env.UPSTASH_REDIS_REST_URL || '';
 
       // If it's a Upstash URL with redis://, convert to rediss://
       if (redisUrl.startsWith('redis://') && redisUrl.includes('upstash.io')) {
@@ -21,31 +36,44 @@ async function getRedisClient() {
       }
 
       redisClient = createClient({
-        url: redisUrl
+        url: redisUrl,
+        socket: {
+          reconnectStrategy: (retries) => {
+            if (retries > 3) {
+              console.warn('⚠️  Redis reconnection failed after 3 retries, using fallback');
+              return false;
+            }
+            return Math.min(retries * 50, 500);
+          }
+        }
       });
 
       redisClient.on('error', (err) => {
-        console.error('Redis Client Error', err);
+        console.warn('⚠️  Redis error, using fallback:', err.message);
         redisClient = null; // Reset on error
       });
 
-      await redisClient.connect();
+      // Connect with timeout
+      const connectPromise = redisClient.connect();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Redis connection timeout')), 3000)
+      );
+
+      await Promise.race([connectPromise, timeoutPromise]);
       console.log('✅ Redis CSRF token storage connected');
     } catch (error) {
       const isProduction = process.env.NODE_ENV === 'production';
-      const hasRedisUrl = !!process.env.REDIS_URL;
+      const hasRedisUrl = !!process.env.REDIS_URL || !!process.env.UPSTASH_REDIS_REST_URL;
 
       if (isProduction && hasRedisUrl) {
-        // In production with explicit Redis config, this is a critical error
         console.error('🚨 CRITICAL: Redis connection failed in production!', error.message);
-        console.error('CSRF tokens will be lost on server restart.');
-        console.error('Check REDIS_URL configuration:', process.env.REDIS_URL);
       } else {
-        // Development/fallback scenario - acceptable
-        console.warn('⚠️  Redis connection failed, falling back to in-memory CSRF storage', error.message);
+        console.warn('⚠️  Redis unavailable, using in-memory CSRF storage:', error.message);
       }
-      // Fallback for local development
-      return null;
+      redisClient = null;
+    } finally {
+      redisInitialized = true;
+      redisInitializing = false;
     }
   }
   return redisClient;

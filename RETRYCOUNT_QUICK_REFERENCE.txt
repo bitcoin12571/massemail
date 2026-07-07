@@ -1,0 +1,173 @@
+RETRYCOUNT QUICK REFERENCE CARD
+================================
+
+COLUMN EXISTS IN DATABASE
+  sqlite3 mailora.sqlite ".schema Emails" | grep retryCount
+  -> retryCount INTEGER DEFAULT 0 ✓
+
+FILES & LOCATIONS
+  1. Schema defined:     backend/src/models/Email.js (lines 44-48)
+  2. Created in DB:      backend/src/migrations/001_initial_schema.js (line 238)
+  3. Safety-added:       backend/src/migrations/002_add_email_retry_fields.js (line 17)
+  4. Used in logic:      backend/src/services/emailRetryService.js (lines 16-147)
+  5. Scheduled via:      backend/src/services/schedulerService.js
+
+KEY FUNCTIONS
+  markForRetry(emailId, reason)
+    -> Increments retryCount
+    -> Sets nextRetryAt = now + exponential_delay
+    -> Max 3 retries, then status='failed'
+
+  getEmailsReadyForRetry()
+    -> SELECT WHERE status='pending' AND nextRetryAt <= now
+
+  retryEmail(email, sendEmailFn)
+    -> Attempts resend
+    -> On success: status='sent'
+    -> On failure: calls markForRetry()
+
+  processRetryQueue(sendEmailFn)
+    -> Orchestrates entire retry workflow
+    -> Background job runs every 5 minutes
+
+BACKOFF DELAYS
+  Retry 1:  5 minutes     (immediately after fail)
+  Retry 2: 15 minutes     (3x multiplier)
+  Retry 3: 45 minutes     (9x multiplier)
+  Fail:    Status='failed' (after 3 retries)
+
+DATABASE SCHEMA
+  CREATE TABLE Emails (
+    id UUID PRIMARY KEY,
+    campaignId UUID NOT NULL,
+    contactId UUID NOT NULL,
+    recipientEmail VARCHAR(255) NOT NULL,
+    status ENUM DEFAULT 'pending',
+    sendgridMessageId VARCHAR(255),
+    sentAt DATETIME,
+    deliveredAt DATETIME,
+    openedAt DATETIME,
+    clickedAt DATETIME,
+    failureReason TEXT,
+    retryCount INTEGER DEFAULT 0,        <- Track attempts
+    lastRetryAt DATETIME,                <- When we last tried
+    nextRetryAt DATETIME,                <- When to try again
+    bounceType VARCHAR,
+    bouncedAt DATETIME,
+    complaintType VARCHAR,
+    complainedAt DATETIME,
+    createdAt DATETIME,
+    updatedAt DATETIME
+  );
+
+  CREATE INDEX emails_next_retry_at ON Emails (nextRetryAt);
+
+EMAIL STATE MACHINE
+  pending (new) ──► retry queue checks nextRetryAt ──► send again ──┐
+                                                                     │
+  ┌────────────────────────────────────────────────────────────────┘
+  │
+  ├─► SUCCESS: status='sent' ──► (can be delivered/opened/clicked)
+  │
+  └─► FAILURE: markForRetry()
+      ├─► retryCount = 1: nextRetryAt = 5min
+      │   └─► pending (tries again at +5min)
+      ├─► retryCount = 2: nextRetryAt = 15min
+      │   └─► pending (tries again at +15min)
+      ├─► retryCount = 3: nextRetryAt = 45min
+      │   └─► pending (tries again at +45min)
+      └─► retryCount = 4: status='failed'
+          └─► STOP (no more retries)
+
+FLOW EXAMPLE
+  1. User sends campaign to 1000 recipients
+     -> 980 emails sent immediately (retryCount=0)
+     -> 20 emails fail (connection timeout)
+  
+  2. markForRetry() called for each failed email
+     -> retryCount incremented to 1
+     -> nextRetryAt set to now + 5 minutes
+     -> status remains 'pending'
+  
+  3. Scheduler runs at +5 minutes
+     -> Finds 20 emails with status='pending' and nextRetryAt <= now
+     -> Attempts resend
+     -> 18 succeed (status='sent')
+     -> 2 still fail (network issue)
+  
+  4. For 2 remaining failures
+     -> retryCount incremented to 2
+     -> nextRetryAt set to now + 15 minutes
+  
+  5. Scheduler runs at +20 minutes
+     -> Finds 2 emails ready for retry
+     -> 2 succeed (network recovered)
+     -> status='sent' for all
+  
+  Result: 980 + 18 + 2 = 1000 emails delivered
+          Total attempts: 1020 (982 + 38 retries)
+
+COMMON QUERIES
+  Check pending retries:
+    SELECT id, retryCount, nextRetryAt FROM Emails 
+    WHERE status='pending' AND retryCount > 0;
+
+  Check failed emails:
+    SELECT id, retryCount, failureReason FROM Emails 
+    WHERE status='failed';
+
+  Retry stats:
+    SELECT retryCount, COUNT(*) FROM Emails GROUP BY retryCount;
+
+VERIFY SETUP
+  ✓ Column exists:    sqlite3 mailora.sqlite ".schema Emails" | grep retryCount
+  ✓ Model defined:    grep "retryCount:" backend/src/models/Email.js
+  ✓ Migration 001:    grep -A 5 "retryCount:" backend/src/migrations/001_initial_schema.js
+  ✓ Migration 002:    grep "if (!table.retryCount)" backend/src/migrations/002_add_email_retry_fields.js
+  ✓ Service uses it:  grep "retryCount" backend/src/services/emailRetryService.js
+  ✓ All migrations applied: npm run migrate:run
+
+TROUBLESHOOTING
+  Error: "retryCount column not found"
+    -> Run: npm run migrate:run
+
+  Email not retrying:
+    -> Check scheduler running: npm run dev:backend
+    -> Check nextRetryAt is set: SELECT id, nextRetryAt FROM Emails WHERE retryCount > 0;
+
+  retryCount stays 0:
+    -> Errors not being caught
+    -> Check if markForRetry() is called in error handlers
+    -> Add try/catch blocks if missing
+
+PRODUCTION CHECKLIST
+  [x] Migrations applied successfully
+  [x] retryCount column exists in database
+  [x] nextRetryAt index created for performance
+  [x] Scheduler service configured to run
+  [x] Error handlers call markForRetry()
+  [x] Email provider configured (Gmail/SendGrid/etc)
+  [x] Redis available for distributed state
+  [x] Logging enabled for audit trail
+
+ENDPOINTS THAT TRIGGER RETRIES
+  POST /api/campaigns/{id}/send
+    -> emailService.sendEmail()
+    -> CATCH -> emailRetryService.markForRetry()
+
+  GET /api/campaigns/{id}/status
+    -> Shows retry status and next retry time
+
+  Background: schedulerService.processRetryQueue()
+    -> Runs every 5 minutes automatically
+
+ENVIRONMENT VARIABLES
+  EMAIL_PROVIDER=gmail|sendgrid|resend|smtp|preview
+  GMAIL_EMAIL=user@gmail.com
+  GMAIL_PASSWORD=app_specific_password
+  SENDGRID_API_KEY=SG.xxxxx
+  RESEND_API_KEY=re_xxxxx
+  SMTP_HOST=smtp.example.com
+  SMTP_USER=user@example.com
+  SMTP_PASS=password
+

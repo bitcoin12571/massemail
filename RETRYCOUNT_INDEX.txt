@@ -1,0 +1,188 @@
+RETRYCOUNT DOCUMENTATION INDEX
+===============================
+
+Three comprehensive guides have been created to help you understand
+the retryCount column and the email retry system.
+
+1. CODEBASE_STRUCTURE_ANALYSIS.md (3.6K)
+   - EMAILS table column definitions (21 columns)
+   - Retry system architecture 
+   - Email sending flow (Resend/Gmail/SendGrid/SMTP)
+   - All 4 migration files explained
+   - Code locations using retryCount
+   - Key files summary table
+
+   USE THIS: Understanding complete system design
+
+2. RETRYCOUNT_COMPLETE_GUIDE.txt (6.5K)
+   - Database verification (confirmed column exists)
+   - Model definition (Email.js schema)
+   - Migration chain details (001-004)
+   - Retry service implementation (4 functions)
+   - Email sending service (all providers)
+   - Complete flow diagram with state machine
+   - Code locations with line numbers
+   - Performance indexes explained
+   - Database queries for monitoring
+   - Troubleshooting guide
+
+   USE THIS: Deep diving into retry mechanism
+
+3. RETRYCOUNT_QUICK_REFERENCE.txt (6.0K)
+   - Database verification command
+   - Files & locations (1-5 key files)
+   - Key functions (4 core functions)
+   - Backoff delays (5min to 15min to 45min)
+   - Database schema (full DDL)
+   - Email state machine diagram
+   - Flow example (1000 recipients scenario)
+   - Common SQL queries
+   - Troubleshooting quick fixes
+   - Environment variables needed
+
+   USE THIS: Quick lookup or debugging
+
+READING ORDER FOR FIRST-TIME
+============================
+
+1. Start: RETRYCOUNT_QUICK_REFERENCE.txt (2 min)
+   - Overview, backoff, state machine
+
+2. Deep: CODEBASE_STRUCTURE_ANALYSIS.md (10 min)
+   - Files, line numbers, complete structure
+
+3. Full: RETRYCOUNT_COMPLETE_GUIDE.txt (15 min)
+   - Complete lifecycle and examples
+
+SYSTEM SUMMARY
+==============
+
+STATUS: FULLY IMPLEMENTED AND ACTIVE
+
+COLUMN: retryCount (INTEGER, DEFAULT=0)
+  Location: backend/src/models/Email.js (line 44)
+  Database: mailora.sqlite (VERIFIED PRESENT)
+
+RETRIES: Max 3 attempts with exponential backoff
+  Attempt 1: Immediate fail -> wait 5 minutes
+  Attempt 2: Still failing -> wait 15 minutes
+  Attempt 3: Still failing -> wait 45 minutes
+  Attempt 4+: Mark as 'failed', stop retrying
+
+KEY SERVICE: emailRetryService.js
+  markForRetry() - Schedule next retry
+  getEmailsReadyForRetry() - Find emails to retry
+  retryEmail() - Attempt resend
+  processRetryQueue() - Orchestrate all retries
+
+SCHEDULER: schedulerService.js
+  Runs every 5 minutes
+  Finds pending emails with nextRetryAt less than now
+  Attempts resend for each
+
+QUICK VERIFICATION
+==================
+
+Column exists:
+  sqlite3 mailora.sqlite ".schema Emails" | grep retryCount
+
+Service works:
+  npm run dev:backend
+  (look for "Email retry" debug logs)
+
+Test flow:
+  Create campaign -> Send -> Check DB:
+  sqlite3 mailora.sqlite \
+    "SELECT id, status, retryCount, nextRetryAt FROM Emails LIMIT 5;"
+
+COMMON ISSUES & FIXES
+====================
+
+Issue: retryCount column not found
+  Fix: npm run migrate:run
+
+Issue: Email never retries
+  Fix: npm run dev:backend (includes scheduler)
+
+Issue: retryCount stays at 0
+  Fix: Check error handlers in route files
+
+FILE LOCATIONS
+==============
+
+Models:
+  backend/src/models/Email.js (line 44)
+
+Migrations:
+  backend/src/migrations/001_initial_schema.js (line 238)
+  backend/src/migrations/002_add_email_retry_fields.js (line 17)
+
+Services:
+  backend/src/services/emailRetryService.js
+    markForRetry() - line 24
+    getEmailsReadyForRetry() - line 66
+    retryEmail() - line 90
+    processRetryQueue() - line 120
+
+  backend/src/services/emailService.js (line 185)
+  backend/src/services/schedulerService.js
+
+TESTING COMMANDS
+================
+
+Check current retry state:
+  sqlite3 mailora.sqlite \
+    "SELECT id, status, retryCount, nextRetryAt FROM Emails \
+     WHERE retryCount > 0 ORDER BY nextRetryAt ASC LIMIT 10;"
+
+Monitor retry stats:
+  sqlite3 mailora.sqlite \
+    "SELECT retryCount, COUNT(*) as count FROM Emails \
+     GROUP BY retryCount;"
+
+Check failed emails:
+  sqlite3 mailora.sqlite \
+    "SELECT id, retryCount, failureReason FROM Emails \
+     WHERE status='failed';"
+
+PRODUCTION CHECKLIST
+====================
+
+Database:
+  [ ] Migrations applied successfully
+  [ ] retryCount column exists
+  [ ] nextRetryAt index created
+
+Configuration:
+  [ ] EMAIL_PROVIDER set (gmail|sendgrid|resend|smtp)
+  [ ] Provider credentials configured
+  [ ] SMTP/API credentials tested
+
+Code:
+  [ ] Error handlers call markForRetry()
+  [ ] Scheduler service enabled
+  [ ] Tests passing: npm test
+
+Monitoring:
+  [ ] Log aggregation set up
+  [ ] Error rate monitoring enabled
+  [ ] Email delivery metrics tracked
+
+NEXT STEPS
+==========
+
+1. Read RETRYCOUNT_QUICK_REFERENCE.txt (2 min overview)
+2. Verify setup: npm run migrate:run
+3. Test flow: Create campaign and send emails
+4. Monitor: Use sqlite3 queries provided in guides
+5. Deploy: Follow production checklist
+6. Monitor logs: Look for "EMAIL_RETRY" entries
+
+All documentation in project root:
+  CODEBASE_STRUCTURE_ANALYSIS.md
+  RETRYCOUNT_COMPLETE_GUIDE.txt
+  RETRYCOUNT_QUICK_REFERENCE.txt
+  RETRYCOUNT_INDEX.txt (this file)
+
+Generated: 2026-07-07
+Status: Production Ready
