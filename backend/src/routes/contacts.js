@@ -151,36 +151,24 @@ router.post('/', validateRequest(contactSchema), async (req, res) => {
   try {
     const { email, name, customData, tags } = req.body;
 
-    const verificationToken = generateVerificationToken();
-    const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
     const contact = await Contact.create({
       email: email.toLowerCase().trim(),
       name,
       tags: tags || [],
-      verified: false,
+      status: 'active', // Ensure status is set
+      verified: true, // Auto-verify for immediate sending
       verificationToken: null,
       verificationTokenExpiry: null,
       customData: customData || {},
       createdBy: req.user.id
     });
 
-    // Skip verification email - contacts are auto-verified for immediate sending
-    // try {
-    //   const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}&email=${encodeURIComponent(contact.email)}`;
-    //   await sendVerificationEmail(contact, verificationUrl);
-    // } catch (emailError) {
-    //   console.error('Verification email send failed:', emailError);
-    // }
-
-    res.status(201).json({
-      ...contact.toJSON(),
-      message: 'Contact created as unverified.'
-    });
+    res.status(201).json(contact.toJSON());
   } catch (error) {
     if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(400).json({ error: 'This email is already in your contacts' });
     }
+    logger.error('CONTACT_CREATE', error.message);
     res.status(500).json({ error: error.message });
   }
 });
