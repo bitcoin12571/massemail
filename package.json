@@ -18,7 +18,9 @@
     "migrate:create": "sequelize-cli migration:generate --name",
     "migrate:run": "sequelize-cli db:migrate --config ./backend/config/config.json --migrations-path ./backend/src/migrations --env development",
     "migrate:undo": "sequelize-cli db:migrate:undo --config ./backend/config/config.json --migrations-path ./backend/src/migrations --env development",
-    "migrate:undo:all": "sequelize-cli db:migrate:undo:all --config ./backend/config/config.json --migrations-path ./backend/src/migrations --env development"
+    "migrate:undo:all": "sequelize-cli db:migrate:undo:all --config ./backend/config/config.json --migrations-path ./backend/src/migrations --env development",
+    "migrate:prod": "NODE_ENV=production sequelize-cli db:migrate --config ./backend/config/config.json --migrations-path ./backend/src/migrations --env production",
+    "migrate:prod:undo": "NODE_ENV=production sequelize-cli db:migrate:undo --config ./backend/config/config.json --migrations-path ./backend/src/migrations --env production"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
