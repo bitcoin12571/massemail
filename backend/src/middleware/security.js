@@ -187,6 +187,9 @@ export async function verifyCsrfToken(req, res, next) {
     // Regenerate token and allow request (less strict mode for better UX)
     logger.warn('CSRF', 'Token not found, regenerating');
 
+    // Get the session ID from the request header
+    const sessionId = req.headers['x-session-id'] || randomUUID();
+
     // Don't block the request - generate a new token for next time
     const newToken = randomBytes(32).toString('hex');
     const newTokenData = {
