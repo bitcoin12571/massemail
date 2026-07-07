@@ -88,7 +88,7 @@ export function getSessionId() {
 }
 
 // Add auth token to every request
-api.interceptors.request.use((config) => {
+api.interceptors.request.use(async (config) => {
   const token = localStorage.getItem('authToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -96,8 +96,13 @@ api.interceptors.request.use((config) => {
 
   // Add CSRF token for state-changing requests
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase())) {
-    const currentCsrfToken = getCsrfToken();
+    let currentCsrfToken = getCsrfToken();
     const currentSessionId = getSessionId();
+
+    // Regenerate CSRF token if missing
+    if (!currentCsrfToken) {
+      currentCsrfToken = await initializeCsrfToken();
+    }
 
     if (currentCsrfToken) {
       config.headers['X-CSRF-Token'] = currentCsrfToken;
