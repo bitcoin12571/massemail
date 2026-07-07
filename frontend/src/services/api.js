@@ -36,7 +36,7 @@ export function getApiErrorMessage(error, fallback = 'Request failed') {
 
 /**
  * Fetch CSRF token from backend
- * Called on app initialization
+ * Called on app initialization and before requests if needed
  */
 export async function initializeCsrfToken() {
   try {
@@ -62,6 +62,15 @@ export async function initializeCsrfToken() {
     console.warn('Failed to initialize CSRF token:', error);
     return null;
   }
+}
+
+/**
+ * Force refresh CSRF token
+ * Call this on page navigation or when token might be stale
+ */
+export async function refreshCsrfToken() {
+  csrfToken = null; // Clear cached token
+  return await initializeCsrfToken();
 }
 
 /**
@@ -94,22 +103,24 @@ api.interceptors.request.use(async (config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Add CSRF token for state-changing requests
-  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase())) {
-    let currentCsrfToken = getCsrfToken();
-    const currentSessionId = getSessionId();
+  // Add CSRF token for all requests (including GET)
+  // This ensures token is always fresh
+  let currentCsrfToken = getCsrfToken();
+  const currentSessionId = getSessionId();
 
+  // For state-changing requests, always ensure we have a token
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase())) {
     // Regenerate CSRF token if missing
     if (!currentCsrfToken) {
       currentCsrfToken = await initializeCsrfToken();
     }
+  }
 
-    if (currentCsrfToken) {
-      config.headers['X-CSRF-Token'] = currentCsrfToken;
-    }
-    if (currentSessionId) {
-      config.headers['X-Session-Id'] = currentSessionId;
-    }
+  if (currentCsrfToken) {
+    config.headers['X-CSRF-Token'] = currentCsrfToken;
+  }
+  if (currentSessionId) {
+    config.headers['X-Session-Id'] = currentSessionId;
   }
 
   return config;
