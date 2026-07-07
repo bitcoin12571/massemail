@@ -9,6 +9,7 @@ import { sequelize } from './config/database.js';
 import { initializeQueue } from './services/queueService.js';
 import { initializeEmailService } from './services/emailService.js';
 import { startScheduler } from './services/schedulerService.js';
+import { runPendingMigrations } from './services/migrationService.js';
 import authRoutes from './routes/auth.js';
 import contactRoutes from './routes/contacts.js';
 import campaignRoutes from './routes/campaigns.js';
@@ -64,9 +65,12 @@ export function initializeApp() {
       await sequelize.authenticate();
       logger.info('DB', 'Database connected');
 
+      // Run any pending migrations to ensure schema is up-to-date
+      logger.info('DB', 'Running pending migrations...');
+      await runPendingMigrations();
+
       // Note: We use migrations instead of sync() to manage schema changes
       // sync() is disabled to avoid index conflicts with migrations
-      // If needed, migrations can be run via: npm run migrate:run
       logger.info('DB', 'Using migrations for schema management (sync disabled)');
 
       await initializeEmailService();
