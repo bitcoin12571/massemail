@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual, randomBytes } from 'node:crypto';
 import crypto from 'node:crypto';
 import { createClient } from 'redis';
+import logger from '../services/logger.js';
 
 // CSRF token expiry: 1 year (31536000 seconds) - effectively infinite/never expires
 // Users never need to refresh tokens, perfect for long-term stability
