@@ -12,7 +12,6 @@ import logger from './logger.js';
  */
 async function ensureContactsColumns() {
   try {
-    const isPostgres = sequelize.options.dialect === 'postgres';
     const table = 'Contacts';
 
     const columns = [
@@ -192,22 +191,35 @@ export async function runPendingMigrations() {
   try {
     logger.info('SCHEMA', 'Initializing database schema...');
 
-    // First ensure BulkCampaign and related tables exist by syncing them
+    // First ensure all critical tables exist by syncing them
     try {
-      const BulkCampaign = sequelize.models.BulkCampaign;
-      const BulkCampaignSend = sequelize.models.BulkCampaignSend;
+      const modelsToSync = [
+        'User',
+        'Campaign',
+        'Contact',
+        'Email',
+        'SystemSetting',
+        'JobQueue',
+        'ParsedEmail',
+        'BulkCampaign',
+        'BulkCampaignSend',
+        'Session',
+        'AuditLog'
+      ];
 
-      if (BulkCampaign) {
-        await BulkCampaign.sync({ alter: false });
-        logger.info('SCHEMA', '✓ BulkCampaign table synced');
-      }
-
-      if (BulkCampaignSend) {
-        await BulkCampaignSend.sync({ alter: false });
-        logger.info('SCHEMA', '✓ BulkCampaignSend table synced');
+      for (const modelName of modelsToSync) {
+        const model = sequelize.models[modelName];
+        if (model) {
+          try {
+            await model.sync({ alter: false });
+            logger.info('SCHEMA', `✓ ${modelName} table synced`);
+          } catch (err) {
+            logger.warn('SCHEMA', `Could not sync ${modelName}:`, err.message);
+          }
+        }
       }
     } catch (err) {
-      logger.info('SCHEMA', 'BulkCampaign tables sync:', err.message);
+      logger.info('SCHEMA', 'Model sync error:', err.message);
     }
 
     // Ensure all required columns exist
