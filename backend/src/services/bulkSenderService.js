@@ -5,6 +5,19 @@ import ParsedEmail from '../models/ParsedEmail.js';
 import { v4 as uuidv4 } from 'uuid';
 import { isReservedTestEmail } from './chisinauTestDataService.js';
 
+/**
+ * Delay between batches to prevent Gmail rate limiting
+ * 5 seconds between each batch of 100 emails
+ */
+const BATCH_DELAY_MS = 5000;
+
+/**
+ * Sleep helper function
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export async function createBulkCampaign(data) {
   try {
     const campaign = await BulkCampaign.create({
@@ -80,13 +93,17 @@ export async function sendBulkCampaign(campaignId, emailIds = null) {
 
     await BulkCampaignSend.bulkCreate(sendRecords);
 
-    // Send emails (batch process)
+    // Send emails (batch process with delay between batches)
     const batchSize = 100;
     let sentCount = 0;
     let failedCount = 0;
+    const totalBatches = Math.ceil(emails.length / batchSize);
 
     for (let i = 0; i < emails.length; i += batchSize) {
+      const batchNumber = Math.floor(i / batchSize) + 1;
       const batch = emails.slice(i, i + batchSize);
+
+      console.log(`[BULK SENDER] Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`);
 
       await Promise.allSettled(batch.map(async (email) => {
         try {
@@ -129,6 +146,12 @@ export async function sendBulkCampaign(campaignId, emailIds = null) {
           }
         }
       }));
+
+      // Add delay between batches (except after last batch)
+      if (batchNumber < totalBatches) {
+        console.log(`[BULK SENDER] Waiting ${BATCH_DELAY_MS / 1000}s before next batch...`);
+        await sleep(BATCH_DELAY_MS);
+      }
     }
 
     // Update campaign with results
@@ -196,8 +219,14 @@ export async function sendBulkCampaignDirect(campaign, recipients) {
   let failedCount = 0;
 
   const batchSize = 100;
+  const totalBatches = Math.ceil(uniqueRecipients.length / batchSize);
+
   for (let index = 0; index < uniqueRecipients.length; index += batchSize) {
+    const batchNumber = Math.floor(index / batchSize) + 1;
     const batch = uniqueRecipients.slice(index, index + batchSize);
+
+    console.log(`[BULK SENDER] Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`);
+
     const results = await Promise.allSettled(batch.map(recipient => {
       const personalizedHtml = campaign.htmlTemplate
         .replace(/{{name}}/g, recipient.name || recipient.email)
@@ -214,6 +243,12 @@ export async function sendBulkCampaignDirect(campaign, recipients) {
 
     sentCount += results.filter(result => result.status === 'fulfilled').length;
     failedCount += results.filter(result => result.status === 'rejected').length;
+
+    // Add delay between batches (except after last batch)
+    if (batchNumber < totalBatches) {
+      console.log(`[BULK SENDER] Waiting ${BATCH_DELAY_MS / 1000}s before next batch...`);
+      await sleep(BATCH_DELAY_MS);
+    }
   }
 
   return {
