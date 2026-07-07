@@ -192,6 +192,24 @@ export async function runPendingMigrations() {
   try {
     logger.info('SCHEMA', 'Initializing database schema...');
 
+    // First ensure BulkCampaign and related tables exist by syncing them
+    try {
+      const BulkCampaign = sequelize.models.BulkCampaign;
+      const BulkCampaignSend = sequelize.models.BulkCampaignSend;
+
+      if (BulkCampaign) {
+        await BulkCampaign.sync({ alter: false });
+        logger.info('SCHEMA', '✓ BulkCampaign table synced');
+      }
+
+      if (BulkCampaignSend) {
+        await BulkCampaignSend.sync({ alter: false });
+        logger.info('SCHEMA', '✓ BulkCampaignSend table synced');
+      }
+    } catch (err) {
+      logger.info('SCHEMA', 'BulkCampaign tables sync:', err.message);
+    }
+
     // Ensure all required columns exist
     await ensureContactsColumns();
     await ensureCampaignsColumns();
