@@ -47,6 +47,21 @@ export async function sendBulkCampaign(campaignId, emailIds = null) {
       throw new Error('No valid emails found for this campaign');
     }
 
+    // Parse attachments - handle both JSON string and array formats
+    let attachments = [];
+    if (campaign.attachments) {
+      if (typeof campaign.attachments === 'string') {
+        try {
+          attachments = JSON.parse(campaign.attachments);
+        } catch (e) {
+          console.error('Failed to parse attachments JSON:', e.message);
+          attachments = [];
+        }
+      } else if (Array.isArray(campaign.attachments)) {
+        attachments = campaign.attachments;
+      }
+    }
+
     // Update campaign status
     await campaign.update({
       status: 'sending',
@@ -85,7 +100,7 @@ export async function sendBulkCampaign(campaignId, emailIds = null) {
             to: email.email,
             subject: campaign.subject,
             html: personalizedHtml,
-            attachments: Array.isArray(campaign.attachments) ? campaign.attachments : []
+            attachments: attachments && attachments.length > 0 ? attachments : undefined
           });
 
           const sendRecord = await BulkCampaignSend.findOne({
@@ -162,6 +177,21 @@ export async function sendBulkCampaignDirect(campaign, recipients) {
     throw new Error('No valid emails found for this campaign');
   }
 
+  // Parse attachments - handle both JSON string and array formats
+  let attachments = [];
+  if (campaign.attachments) {
+    if (typeof campaign.attachments === 'string') {
+      try {
+        attachments = JSON.parse(campaign.attachments);
+      } catch (e) {
+        console.error('Failed to parse attachments JSON:', e.message);
+        attachments = [];
+      }
+    } else if (Array.isArray(campaign.attachments)) {
+      attachments = campaign.attachments;
+    }
+  }
+
   let sentCount = 0;
   let failedCount = 0;
 
@@ -178,7 +208,7 @@ export async function sendBulkCampaignDirect(campaign, recipients) {
         to: recipient.email,
         subject: campaign.subject,
         html: personalizedHtml,
-        attachments: Array.isArray(campaign.attachments) ? campaign.attachments : []
+        attachments: attachments && attachments.length > 0 ? attachments : undefined
       });
     }));
 
