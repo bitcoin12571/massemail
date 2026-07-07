@@ -39,6 +39,12 @@ const sequelize = usePostgres
       dialect: 'postgres',
       dialectModule: pg,
       logging: false,
+      pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+      },
       dialectOptions: process.env.DATABASE_SSL === 'false'
         ? {}
         : {
@@ -46,7 +52,9 @@ const sequelize = usePostgres
               require: true,
               rejectUnauthorized: false
             }
-          }
+          },
+      // Add request timeout
+      requestTimeout: 30000
     })
   : new Sequelize({
       dialect: 'sqlite',
