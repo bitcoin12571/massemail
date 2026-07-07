@@ -11,6 +11,7 @@ export async function createBulkCampaign(data) {
       name: data.name,
       subject: data.subject,
       htmlTemplate: data.htmlTemplate,
+      attachments: Array.isArray(data.attachments) ? data.attachments : [],
       region: data.region || null,
       status: 'draft',
       totalRecipients: data.totalRecipients || 0

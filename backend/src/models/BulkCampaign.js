@@ -19,6 +19,12 @@ const BulkCampaign = sequelize.define('BulkCampaign', {
     type: DataTypes.TEXT,
     allowNull: false
   },
+  attachments: {
+    type: DataTypes.JSON,
+    defaultValue: [],
+    allowNull: true,
+    comment: 'Array of attachments in base64 format'
+  },
   region: {
     type: DataTypes.STRING,
     allowNull: true,

@@ -20,6 +20,7 @@ router.post('/campaign', bulkAttachmentUpload.array('attachments'), async (req, 
       name,
       subject,
       htmlTemplate,
+      attachments,
       totalRecipients
     });
 
