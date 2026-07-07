@@ -14,6 +14,8 @@ const api = axios.create({
 // Store CSRF token and session ID
 let csrfToken = null;
 let sessionId = null;
+let tokenInitializing = false;
+let tokenPromise = null;
 
 export function getApiErrorMessage(error, fallback = 'Request failed') {
   const payload = error?.response?.data;
@@ -36,28 +38,52 @@ export function getApiErrorMessage(error, fallback = 'Request failed') {
 
 /**
  * Fetch CSRF token from backend
- * Called on app initialization and before requests if needed
+ * Uses a lock to prevent race conditions when multiple requests need a token
  */
 export async function initializeCsrfToken() {
   try {
-    // Generate or retrieve session ID
-    sessionId = sessionStorage.getItem('sessionId') || sessionId || crypto.randomUUID?.() || `session-${Date.now()}`;
-
-    // Make a GET request to trigger CSRF token generation
-    const response = await api.get('/health', {
-      headers: {
-        'X-Session-Id': sessionId
-      }
-    });
-
-    // Extract CSRF token from response headers
-    csrfToken = response.headers['x-csrf-token'];
-    if (csrfToken) {
-      sessionStorage.setItem('csrfToken', csrfToken);
-      sessionStorage.setItem('sessionId', sessionId);
+    // If already initializing, wait for that promise
+    if (tokenPromise) {
+      return await tokenPromise;
     }
 
-    return csrfToken;
+    // If token already exists, return it
+    if (csrfToken) {
+      return csrfToken;
+    }
+
+    // Mark as initializing and create the promise
+    tokenInitializing = true;
+    tokenPromise = (async () => {
+      try {
+        // Generate or retrieve session ID
+        sessionId = sessionStorage.getItem('sessionId') || sessionId || crypto.randomUUID?.() || `session-${Date.now()}`;
+
+        // Make a GET request to trigger CSRF token generation
+        const response = await api.get('/health', {
+          headers: {
+            'X-Session-Id': sessionId
+          }
+        });
+
+        // Extract CSRF token from response headers
+        csrfToken = response.headers['x-csrf-token'];
+        if (csrfToken) {
+          sessionStorage.setItem('csrfToken', csrfToken);
+          sessionStorage.setItem('sessionId', sessionId);
+        }
+
+        return csrfToken;
+      } catch (error) {
+        console.warn('Failed to initialize CSRF token:', error);
+        return null;
+      } finally {
+        tokenInitializing = false;
+        tokenPromise = null;
+      }
+    })();
+
+    return await tokenPromise;
   } catch (error) {
     console.warn('Failed to initialize CSRF token:', error);
     return null;
