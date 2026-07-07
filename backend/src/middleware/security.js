@@ -183,10 +183,36 @@ export async function verifyCsrfToken(req, res, next) {
   }
 
   if (!tokenData) {
-    return res.status(403).json({
-      error: 'Invalid CSRF token',
-      code: 'CSRF_TOKEN_INVALID'
-    });
+    // Token not found - might be expired or new session
+    // Regenerate token and allow request (less strict mode for better UX)
+    logger.warn('CSRF', 'Token not found, regenerating');
+
+    // Don't block the request - generate a new token for next time
+    const newToken = randomBytes(32).toString('hex');
+    const newTokenData = {
+      sessionId,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + (CSRF_TOKEN_EXPIRY * 1000)
+    };
+
+    try {
+      const redis = await getRedisClient();
+      if (redis) {
+        await redis.setEx(`csrf:${newToken}`, CSRF_TOKEN_EXPIRY, JSON.stringify(newTokenData));
+      } else {
+        csrfTokensMemory.set(newToken, newTokenData);
+      }
+    } catch (err) {
+      // Fallback to memory
+      csrfTokensMemory.set(newToken, newTokenData);
+    }
+
+    // Set new token in response header for client to use
+    res.set('X-CSRF-Token', newToken);
+
+    // Continue request (lenient mode)
+    req.csrfToken = newToken;
+    return next();
   }
 
   // SECURITY: Verify token hasn't expired

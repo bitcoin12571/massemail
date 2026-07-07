@@ -154,7 +154,15 @@ api.interceptors.request.use(async (config) => {
 
 // Handle responses
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Always capture fresh CSRF token from response headers
+    const newToken = response.headers['x-csrf-token'];
+    if (newToken) {
+      csrfToken = newToken;
+      sessionStorage.setItem('csrfToken', newToken);
+    }
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/')) {
       localStorage.removeItem('authToken');
