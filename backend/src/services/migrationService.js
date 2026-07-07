@@ -98,7 +98,15 @@ async function ensureCampaignsColumns() {
  */
 async function ensureBulkCampaignColumns() {
   try {
-    const table = 'BulkCampaigns';
+    // Try both table names - PostgreSQL uses lowercase, SQLite uses uppercase
+    let table = 'bulk_campaigns';
+    try {
+      await sequelize.queryInterface.describeTable(table);
+    } catch (err) {
+      // Try uppercase for SQLite
+      table = 'BulkCampaigns';
+      await sequelize.queryInterface.describeTable(table);
+    }
 
     const columns = ['attachments'];
 
