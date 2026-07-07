@@ -104,6 +104,7 @@ router.get('/campaigns', async (req, res) => {
         name: c.name,
         subject: c.subject,
         htmlTemplate: c.htmlTemplate,
+        attachments: c.attachments || [],
         status: c.status,
         totalRecipients: c.totalRecipients,
         sentCount: c.sentCount,
