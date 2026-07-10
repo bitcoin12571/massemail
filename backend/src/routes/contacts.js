@@ -88,11 +88,21 @@ router.get('/', async (req, res) => {
     const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 500);
     const offset = (safePage - 1) * safeLimit;
 
-    const where = { createdBy: req.user.id };
+    // Show both user's own contacts and imported bulk contacts
+    const where = {
+      [Op.or]: [
+        { createdBy: req.user.id },
+        { createdBy: '550e8400-e29b-41d4-a716-446655440000' } // Bulk imported emails
+      ]
+    };
     if (search) {
-      where[Op.or] = [
-        { email: { [Op.like]: `%${search}%` } },
-        { name: { [Op.like]: `%${search}%` } }
+      where[Op.and] = [
+        {
+          [Op.or]: [
+            { email: { [Op.like]: `%${search}%` } },
+            { name: { [Op.like]: `%${search}%` } }
+          ]
+        }
       ];
     }
 
