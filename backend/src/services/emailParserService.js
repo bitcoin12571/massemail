@@ -78,6 +78,12 @@ export async function parseCSV(csvContent) {
     }
 
     const lines = csvContent.split(/\r?\n/).filter(line => line.trim());
+
+    // Validare: maxim 100000 linii
+    if (lines.length > 100000) {
+      throw new Error(`CSV file contains ${lines.length} lines, but maximum allowed is 100000 lines`);
+    }
+
     const results = [];
     const errors = [];
     const delimiter = detectDelimiter(lines[0]);
@@ -237,6 +243,12 @@ export async function deleteByRegion(region) {
 export async function parsePlainText(textContent) {
   try {
     const lines = textContent.split('\n').filter(line => line.trim());
+
+    // Validare: maxim 100000 linii
+    if (lines.length > 100000) {
+      throw new Error(`Text file contains ${lines.length} lines, but maximum allowed is 100000 lines`);
+    }
+
     const results = [];
     const errors = [];
 
@@ -285,6 +297,11 @@ export async function parseJSON(jsonContent) {
 
     if (!Array.isArray(emailsList)) {
       throw new Error('JSON must contain an array of emails or { emails: [...] }');
+    }
+
+    // Validare: maxim 100000 linii
+    if (emailsList.length > 100000) {
+      throw new Error(`JSON file contains ${emailsList.length} entries, but maximum allowed is 100000 entries`);
     }
 
     const results = [];
