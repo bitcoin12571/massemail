@@ -89,22 +89,27 @@ router.get('/', async (req, res) => {
     const offset = (safePage - 1) * safeLimit;
 
     // Show both user's own contacts and imported bulk contacts
-    const where = {
+    const baseWhere = {
       [Op.or]: [
         { createdBy: req.user.id },
         { createdBy: '550e8400-e29b-41d4-a716-446655440000' } // Bulk imported emails
       ]
     };
-    if (search) {
-      where[Op.and] = [
-        {
-          [Op.or]: [
-            { email: { [Op.like]: `%${search}%` } },
-            { name: { [Op.like]: `%${search}%` } }
+
+    // Add search filter if provided
+    const where = search
+      ? {
+          [Op.and]: [
+            baseWhere,
+            {
+              [Op.or]: [
+                { email: { [Op.like]: `%${search}%` } },
+                { name: { [Op.like]: `%${search}%` } }
+              ]
+            }
           ]
         }
-      ];
-    }
+      : baseWhere;
 
     const { count, rows } = await Contact.findAndCountAll({
       where,
