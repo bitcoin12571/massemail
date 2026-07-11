@@ -62,9 +62,9 @@ export default function SendEmail({ onOpenSettings }) {
       .catch(() => setDeliveryMode('preview'));
   }, []);
 
-  // Load total contacts when auto mode is enabled
+  // Load total contacts when auto or schedule mode is enabled
   useEffect(() => {
-    if (sendMode === 'auto') {
+    if (sendMode === 'auto' || sendMode === 'schedule') {
       setIsLoadingContacts(true);
       API.get('/contacts', { params: { limit: 1 } })
         .then(({ data }) => {
