@@ -6,8 +6,10 @@ import {
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
   FormControl,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Paper,
   Select,
@@ -276,9 +278,39 @@ export default function EmailParser() {
         </Paper>
 
         {loading && (
-          <Alert severity="info">
-            {t('parserVerifiedOnly')}
-          </Alert>
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Paper sx={{ p: 3, bgcolor: '#f0f4ff', border: '1px solid #e0e7ff' }}>
+              <Stack spacing={2} alignItems="center">
+                <CircularProgress size={48} />
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    🔍 {t('parserSearchingSelected')}
+                  </Typography>
+                  <Typography color="text.secondary" sx={{ mb: 2 }}>
+                    {progress
+                      ? `Scanez ${progress.checked} din ${progress.total} site-uri...`
+                      : 'Se cauta contacte...'}
+                  </Typography>
+                  {progress && (
+                    <Box sx={{ width: '100%', maxWidth: 400 }}>
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.min((progress.checked / progress.total) * 100, 100)}
+                        sx={{ height: 8, borderRadius: 1, mb: 1 }}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        {Math.round((progress.checked / progress.total) * 100)}% - {progress.checked} din {progress.total}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Stack>
+            </Paper>
+          </motion.div>
         )}
 
         {result && (
