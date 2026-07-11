@@ -644,7 +644,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // Schedule campaign endpoint - 200/day
-router.post('/schedule-campaign', emailSendLimiter, async (req, res) => {
+router.post('/schedule-campaign', emailSendLimiter, attachmentUpload.array('attachments', 5), async (req, res) => {
   try {
     const { subject, message, dailyLimit, totalContacts } = req.body;
 
@@ -653,6 +653,7 @@ router.post('/schedule-campaign', emailSendLimiter, async (req, res) => {
     }
 
     const totalDays = Math.ceil(totalContacts / dailyLimit);
+    const attachments = serializeUploadedFiles(req.files);
 
     // Create campaign record
     const campaign = await Campaign.create({
@@ -660,6 +661,7 @@ router.post('/schedule-campaign', emailSendLimiter, async (req, res) => {
       subject: subject.trim(),
       htmlContent: `<div style="font-family:Arial,sans-serif;line-height:1.6">${message.replaceAll('\n', '<br>')}</div>`,
       textContent: message.trim(),
+      attachments,
       status: 'scheduled',
       createdBy: req.user.id,
       metadata: {
@@ -671,7 +673,7 @@ router.post('/schedule-campaign', emailSendLimiter, async (req, res) => {
       }
     });
 
-    logger.info('SCHEDULE-CAMPAIGN', `Campaign ${campaign.id} scheduled for ${totalDays} days, ${dailyLimit}/day`);
+    logger.info('SCHEDULE-CAMPAIGN', `Campaign ${campaign.id} scheduled for ${totalDays} days, ${dailyLimit}/day with ${attachments.length} attachments`);
 
     res.json({
       success: true,
@@ -679,7 +681,8 @@ router.post('/schedule-campaign', emailSendLimiter, async (req, res) => {
       campaignName: campaign.name,
       totalDays: totalDays,
       dailyLimit: dailyLimit,
-      totalContacts: totalContacts
+      totalContacts: totalContacts,
+      attachmentsCount: attachments.length
     });
   } catch (error) {
     logger.error('SCHEDULE-CAMPAIGN', 'Error scheduling campaign', error);

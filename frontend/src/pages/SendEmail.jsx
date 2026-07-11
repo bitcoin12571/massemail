@@ -294,14 +294,16 @@ export default function SendEmail({ onOpenSettings }) {
 
     setSending(true);
     try {
-      const data = {
-        subject: subject.trim(),
-        message: message.trim(),
-        dailyLimit: DAILY_LIMIT,
-        totalContacts: totalContacts
-      };
+      const data = new FormData();
+      data.append('subject', subject.trim());
+      data.append('message', message.trim());
+      data.append('dailyLimit', DAILY_LIMIT);
+      data.append('totalContacts', totalContacts);
+      files.forEach((file) => data.append('attachments', file));
 
-      const response = await API.post('/contacts/schedule-campaign', data);
+      const response = await API.post('/contacts/schedule-campaign', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
 
       setSendResult({
         success: true,
@@ -309,7 +311,8 @@ export default function SendEmail({ onOpenSettings }) {
         scheduledDays: Math.ceil(totalContacts / DAILY_LIMIT),
         totalContacts: totalContacts,
         dailyLimit: DAILY_LIMIT,
-        subject: subject
+        subject: subject,
+        filesCount: files.length
       });
 
       setResultOpen(true);
@@ -620,6 +623,88 @@ export default function SendEmail({ onOpenSettings }) {
                 rows={10}
                 placeholder="Write your message here..."
               />
+            </motion.div>
+
+            {/* Attachments */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.35 }}
+            >
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>📎 Attachments</Typography>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  size="large"
+                  startIcon={<Image size={20} />}
+                  onClick={() => createFileInput({
+                    accept: 'image/*',
+                    onFile: (selectedFiles) => {
+                      if (selectedFiles[0]) {
+                        addFiles([selectedFiles[0]]);
+                      }
+                    }
+                  })}
+                  disabled={sending}
+                  sx={{ minWidth: 150 }}
+                >
+                  📷 Add Photo
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  size="large"
+                  startIcon={<Paperclip size={20} />}
+                  onClick={() => createFileInput({
+                    accept: '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt',
+                    onFile: (selectedFiles) => {
+                      if (selectedFiles[0]) {
+                        addFiles([selectedFiles[0]]);
+                      }
+                    }
+                  })}
+                  disabled={sending}
+                  sx={{ minWidth: 150 }}
+                >
+                  📎 Add File
+                </Button>
+              </Box>
+
+              {/* Show attached files */}
+              {files.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    📁 Attached Files ({files.length}):
+                  </Typography>
+                  <Stack spacing={1}>
+                    {files.map((file, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          p: 1,
+                          bgcolor: '#f3f4f6',
+                          borderRadius: 1
+                        }}
+                      >
+                        <Typography variant="body2">
+                          {file.name} ({(file.size / 1024).toFixed(2)} KB)
+                        </Typography>
+                        <Button
+                          size="small"
+                          onClick={() => setFiles(current => current.filter((_, i) => i !== index))}
+                          startIcon={<X size={16} />}
+                        >
+                          Remove
+                        </Button>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
             </motion.div>
 
             <motion.div
