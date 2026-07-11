@@ -83,7 +83,7 @@ export default function SendEmail({ onOpenSettings }) {
   useEffect(() => {
     const timeout = setTimeout(async () => {
       try {
-        const { data } = await API.get('/contacts', { params: { search, limit: 500 } });
+        const { data } = await API.get('/contacts', { params: { search, limit: 5000 } });
         const query = search.trim().toLowerCase();
         setContacts((data.contacts || []).filter(contact =>
           !query || contact.email.includes(query) || String(contact.name || '').toLowerCase().includes(query)
@@ -94,7 +94,7 @@ export default function SendEmail({ onOpenSettings }) {
       }
     }, 200);
     const handleContactsUpdate = () => {
-      API.get('/contacts', { params: { search, limit: 500 } })
+      API.get('/contacts', { params: { search, limit: 5000 } })
         .then(({ data }) => setContacts(data.contacts || []))
         .catch(() => setContacts([]));
     };
