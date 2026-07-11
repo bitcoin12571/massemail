@@ -39,6 +39,27 @@ const Campaign = sequelize.define('Campaign', {
   createdBy: {
     type: DataTypes.UUID,
     allowNull: false
+  },
+  // For scheduled campaigns
+  dailyLimit: {
+    type: DataTypes.INTEGER,
+    defaultValue: 200
+  },
+  totalToSend: {
+    type: DataTypes.INTEGER
+  },
+  sentCount: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0
+  },
+  lastSentAt: {
+    type: DataTypes.DATE
+  },
+  nextSendAt: {
+    type: DataTypes.DATE
+  },
+  scheduleStartedAt: {
+    type: DataTypes.DATE
   }
 }, {
   timestamps: true

@@ -3,7 +3,9 @@ import Campaign from '../models/Campaign.js';
 import Email from '../models/Email.js';
 import Contact from '../models/Contact.js';
 import { emailQueue } from './queueService.js';
+import processPendingScheduledCampaigns from './scheduledSendService.js';
 import { Op } from 'sequelize';
+import logger from './logger.js';
 
 /**
  * Email scheduler service
@@ -11,6 +13,7 @@ import { Op } from 'sequelize';
  */
 
 let schedulerTask = null;
+let scheduledCampaignTask = null;
 
 /**
  * Start the email scheduler
@@ -18,7 +21,7 @@ let schedulerTask = null;
  */
 export function startScheduler() {
   if (schedulerTask) {
-    console.log('[SCHEDULER] ⚠️ Scheduler already running, skipping restart');
+    logger.warn('SCHEDULER', 'Scheduler already running, skipping restart');
     return;
   }
 
@@ -27,11 +30,24 @@ export function startScheduler() {
     try {
       await processScheduledCampaigns();
     } catch (error) {
-      console.error('[SCHEDULER] ❌ Error processing scheduled campaigns:', error);
+      logger.error('SCHEDULER', 'Error processing scheduled campaigns:', error);
     }
   });
 
-  console.log('[SCHEDULER] ✅ Email scheduler started (runs every minute)');
+  logger.info('SCHEDULER', 'Email scheduler started (runs every minute)');
+
+  // Also start scheduled campaign sender (every hour)
+  if (!scheduledCampaignTask) {
+    scheduledCampaignTask = cron.schedule('0 * * * *', async () => {
+      try {
+        logger.info('SCHEDULER', 'Running scheduled campaign processor...');
+        await processPendingScheduledCampaigns();
+      } catch (error) {
+        logger.error('SCHEDULER', 'Error in scheduled campaign processor:', error);
+      }
+    });
+    logger.info('SCHEDULER', 'Scheduled campaign processor started (runs every hour)');
+  }
 }
 
 /**
@@ -41,7 +57,12 @@ export function stopScheduler() {
   if (schedulerTask) {
     schedulerTask.stop();
     schedulerTask = null;
-    console.log('[SCHEDULER] ⏹️  Email scheduler stopped');
+    logger.info('SCHEDULER', 'Email scheduler stopped');
+  }
+  if (scheduledCampaignTask) {
+    scheduledCampaignTask.stop();
+    scheduledCampaignTask = null;
+    logger.info('SCHEDULER', 'Scheduled campaign processor stopped');
   }
 }
 

@@ -654,8 +654,10 @@ router.post('/schedule-campaign', emailSendLimiter, attachmentUpload.array('atta
 
     const totalDays = Math.ceil(totalContacts / dailyLimit);
     const attachments = serializeUploadedFiles(req.files);
+    const now = new Date();
+    const nextSendTime = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Tomorrow same time
 
-    // Create campaign record
+    // Create campaign record with scheduling fields
     const campaign = await Campaign.create({
       name: `Scheduled: ${subject.substring(0, 50)}`,
       subject: subject.trim(),
@@ -664,16 +666,74 @@ router.post('/schedule-campaign', emailSendLimiter, attachmentUpload.array('atta
       attachments,
       status: 'scheduled',
       createdBy: req.user.id,
-      metadata: {
-        type: 'scheduled',
-        dailyLimit: dailyLimit,
-        totalContacts: totalContacts,
-        totalDays: totalDays,
-        startedAt: new Date().toISOString()
-      }
+      dailyLimit: Number(dailyLimit),
+      totalToSend: Number(totalContacts),
+      sentCount: 0,
+      scheduleStartedAt: now,
+      lastSentAt: now,
+      nextSendAt: nextSendTime
     });
 
-    logger.info('SCHEDULE-CAMPAIGN', `Campaign ${campaign.id} scheduled for ${totalDays} days, ${dailyLimit}/day with ${attachments.length} attachments`);
+    // Get all contacts for this user
+    const allContacts = await Contact.findAll({
+      where: {
+        createdBy: req.user.id,
+        status: 'active'
+      },
+      limit: Number(dailyLimit),
+      order: [['createdAt', 'ASC']]
+    });
+
+    logger.info('SCHEDULE-CAMPAIGN', `Campaign ${campaign.id} created. Sending first ${allContacts.length} emails now...`);
+
+    // Send first batch immediately
+    const { sendEmail } = await import('../services/emailService.js');
+    const safeMessage = message
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('\n', '<br>');
+
+    let sentCount = 0;
+    for (const contact of allContacts) {
+      try {
+        await sendEmail({
+          to: contact.email,
+          subject: subject.trim(),
+          html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
+          text: message.trim(),
+          attachments: attachments
+        });
+
+        // Create email record
+        await Email.create({
+          campaignId: campaign.id,
+          contactId: contact.id,
+          recipientEmail: contact.email,
+          status: 'sent',
+          sentAt: new Date()
+        });
+
+        sentCount++;
+      } catch (err) {
+        logger.error('SCHEDULE-CAMPAIGN', `Failed to send to ${contact.email}`, err);
+        await Email.create({
+          campaignId: campaign.id,
+          contactId: contact.id,
+          recipientEmail: contact.email,
+          status: 'failed',
+          failureReason: err.message
+        });
+      }
+    }
+
+    // Update campaign with sent count
+    await campaign.update({
+      sentCount: sentCount
+    });
+
+    logger.info('SCHEDULE-CAMPAIGN', `Campaign ${campaign.id} first batch complete: ${sentCount} sent`);
 
     res.json({
       success: true,
@@ -682,6 +742,8 @@ router.post('/schedule-campaign', emailSendLimiter, attachmentUpload.array('atta
       totalDays: totalDays,
       dailyLimit: dailyLimit,
       totalContacts: totalContacts,
+      firstBatchSent: sentCount,
+      nextSendAt: nextSendTime.toISOString(),
       attachmentsCount: attachments.length
     });
   } catch (error) {
