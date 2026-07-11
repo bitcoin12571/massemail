@@ -7,9 +7,11 @@ export const createFileInput = async (options = {}) => {
   const {
     accept = '',
     multiple = false,
-    onFile = () {},
+    onFile,
     folderMode = false // New option to pick folders instead of files
   } = options;
+
+  const handleFiles = onFile || (() => {});
 
   // Try File System Access API first (Chrome/Edge) - shows proper file explorer dialog
   if (folderMode && 'showDirectoryPicker' in window) {
@@ -42,7 +44,7 @@ export const createFileInput = async (options = {}) => {
       await readDirRecursive(dirHandle);
 
       if (files.length > 0) {
-        onFile(files);
+        handleFiles(files);
       } else {
         console.log('No text or CSV files found in folder');
       }
@@ -92,7 +94,7 @@ export const createFileInput = async (options = {}) => {
           })
         );
 
-        onFile(files);
+        handleFiles(files);
         return;
       }
     } catch (error) {
@@ -126,7 +128,7 @@ export const createFileInput = async (options = {}) => {
       const filtered = files.filter(f => f.name.endsWith('.txt') || f.name.endsWith('.csv'));
       onFile(filtered);
     } else {
-      onFile(files);
+      handleFiles(files);
     }
   };
 
