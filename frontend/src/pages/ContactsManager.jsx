@@ -34,6 +34,7 @@ import {
   getContactDisplayName,
   removeLocalContact,
 } from '../utils/localContacts';
+import { createFileInput } from '../utils/filePickerMemory';
 
 const PAGE_SIZE = 100;
 
@@ -108,12 +109,11 @@ export default function ContactsManager() {
     }
   };
 
-  const importCSV = async (event) => {
-    const file = event.target.files?.[0];
+  const importCSV = async (files) => {
+    const file = Array.isArray(files) ? files[0] : files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       setNotice({ type: 'error', text: t('csvTooLarge') });
-      event.target.value = '';
       return;
     }
     setLoading(true);
@@ -134,7 +134,6 @@ export default function ContactsManager() {
       setNotice({ type: 'error', text: getApiErrorMessage(error, t('csvImportFailed')) });
     } finally {
       setLoading(false);
-      event.target.value = '';
     }
   };
 
@@ -213,11 +212,11 @@ export default function ContactsManager() {
             startIcon={<Upload size={18} />}
             disabled={loading}
             onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = '.csv,text/csv';
-              input.onchange = (e) => importCSV(e);
-              input.click();
+              createFileInput({
+                accept: '.csv,text/csv',
+                multiple: false,
+                onFile: importCSV
+              });
             }}
           >
             {t('importCsv')}
@@ -284,11 +283,11 @@ export default function ContactsManager() {
                 variant="contained"
                 startIcon={<Upload size={18} />}
                 onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = '.csv,text/csv';
-                  input.onchange = (e) => importCSV(e);
-                  input.click();
+                  createFileInput({
+                    accept: '.csv,text/csv',
+                    multiple: false,
+                    onFile: importCSV
+                  });
                 }}
               >
                 {t('importCsv')}

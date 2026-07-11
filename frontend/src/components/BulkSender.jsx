@@ -23,6 +23,7 @@ import {
 import { Send, BarChart3, ImagePlus, Trash2, X } from 'lucide-react';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
+import { createFileInput } from '../utils/filePickerMemory';
 
 export default function BulkSender() {
   const { t } = useLanguage();
@@ -100,18 +101,15 @@ export default function BulkSender() {
     }
   };
 
-  const handleAttachmentChange = (event) => {
-    const files = [...(event.target.files || [])];
-    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+  const handleAttachmentChange = (files) => {
+    const imageFiles = Array.isArray(files) ? files.filter(file => file.type.startsWith('image/')) : [];
 
-    if (imageFiles.length !== files.length) {
+    if (files.length > 0 && imageFiles.length !== files.length) {
       setNotice({ type: 'error', text: t('bulkImageOnly') });
-      event.target.value = '';
       return;
     }
 
     setAttachments(current => [...current, ...imageFiles]);
-    event.target.value = '';
   };
 
   const removeAttachment = (index) => {
@@ -366,12 +364,11 @@ export default function BulkSender() {
                 variant="outlined"
                 startIcon={<ImagePlus size={18} />}
                 onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*';
-                  input.multiple = true;
-                  input.onchange = (e) => handleAttachmentChange(e);
-                  input.click();
+                  createFileInput({
+                    accept: 'image/*',
+                    multiple: true,
+                    onFile: handleAttachmentChange
+                  });
                 }}
               >
                 {t('bulkAddImage')}

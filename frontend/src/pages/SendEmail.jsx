@@ -21,6 +21,7 @@ import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { EmailPreviewModalCompose } from '../components/EmailPreviewModalCompose.jsx';
 import { getContactDisplayName } from '../utils/localContacts';
+import { createFileInput } from '../utils/filePickerMemory';
 
 export default function SendEmail({ onOpenSettings }) {
   const { language, t } = useLanguage();
@@ -124,15 +125,14 @@ export default function SendEmail({ onOpenSettings }) {
     }));
   };
 
-  const addFiles = (event) => {
-    const incoming = Array.from(event.target.files || []);
-    const combined = [...files, ...incoming].slice(0, 5);
+  const addFiles = (incoming) => {
+    const incomingFiles = Array.isArray(incoming) ? incoming : Array.from(incoming || []);
+    const combined = [...files, ...incomingFiles].slice(0, 5);
     if (combined.some((file) => file.size > 10 * 1024 * 1024)) {
       setNotice({ type: 'error', text: t('fileTooLarge') });
       return;
     }
     setFiles(combined);
-    event.target.value = '';
   };
 
   const improveWithAI = async () => {
@@ -306,12 +306,11 @@ export default function SendEmail({ onOpenSettings }) {
                   variant="outlined"
                   startIcon={<Image size={17} />}
                   onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.multiple = true;
-                    input.onchange = (e) => addFiles(e);
-                    input.click();
+                    createFileInput({
+                      accept: 'image/*',
+                      multiple: true,
+                      onFile: addFiles
+                    });
                   }}
                 >
                   {t('addPhoto')}
@@ -320,11 +319,11 @@ export default function SendEmail({ onOpenSettings }) {
                   variant="outlined"
                   startIcon={<Paperclip size={17} />}
                   onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.multiple = true;
-                    input.onchange = (e) => addFiles(e);
-                    input.click();
+                    createFileInput({
+                      accept: '',
+                      multiple: true,
+                      onFile: addFiles
+                    });
                   }}
                 >
                   {t('addFile')}
