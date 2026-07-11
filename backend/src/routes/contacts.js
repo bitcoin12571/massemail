@@ -398,36 +398,53 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
       emailRecords.push({ email, contact });
     }
 
-    const results = await Promise.allSettled(
-      emailRecords.map(async ({ email, contact }) => {
-        try {
-          // Log without exposing email
-          logger.debug('SEND-NOW', `Sending email with ${attachments.length} attachments (contactId: ${contact.id})`);
+    // Send in batches of 50 to avoid overwhelming the server
+    const BATCH_SIZE = 50;
+    const allResults = [];
 
-          const result = await sendEmail({
-            to: contact.email,
-            subject: subject.trim(),
-            html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
-            text: message.trim(),
-            attachments: attachments
-          });
+    for (let i = 0; i < emailRecords.length; i += BATCH_SIZE) {
+      const batch = emailRecords.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.allSettled(
+        batch.map(async ({ email, contact }) => {
+          try {
+            logger.debug('SEND-NOW', `Sending email with ${attachments.length} attachments (contactId: ${contact.id})`);
 
-          await email.update({
-            status: 'sent',
-            sentAt: new Date(),
-            sendgridMessageId: result.messageId
-          });
-          return contact.email;
-        } catch (err) {
-          await email.update({
-            status: 'failed',
-            failureReason: (err.message || String(err)).slice(0, 500)
-          });
-          logger.error('SEND-NOW', `Email send failed (contactId: ${contact.id})`, err);
-          throw err;
-        }
-      })
-    );
+            const result = await sendEmail({
+              to: contact.email,
+              subject: subject.trim(),
+              html: `<div style="font-family:Arial,sans-serif;line-height:1.6">${safeMessage}</div>`,
+              text: message.trim(),
+              attachments: attachments
+            });
+
+            await email.update({
+              status: 'sent',
+              sentAt: new Date(),
+              sendgridMessageId: result.messageId
+            });
+            return contact.email;
+          } catch (err) {
+            await email.update({
+              status: 'failed',
+              failureReason: (err.message || String(err)).slice(0, 500)
+            });
+            logger.error('SEND-NOW', `Email send failed (contactId: ${contact.id})`, err);
+            throw err;
+          }
+        })
+      );
+      allResults.push(...batchResults);
+
+      // Log batch progress
+      logger.info('SEND-NOW', `Batch ${Math.ceil((i + BATCH_SIZE) / BATCH_SIZE)} completed: ${batch.length} emails`);
+
+      // Small delay between batches to avoid rate limiting
+      if (i + BATCH_SIZE < emailRecords.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    const results = allResults;
 
     const failedCount = results.filter((result) => result.status === 'rejected').length;
     const sentCount = contacts.length - failedCount;
