@@ -59,7 +59,17 @@ async function ensureCampaignsColumns() {
   try {
     const table = 'Campaigns';
 
-    const columns = ['scheduledAt', 'sentAt', 'attachments'];
+    const columns = [
+      'scheduledAt',
+      'sentAt',
+      'attachments',
+      'dailyLimit',
+      'totalToSend',
+      'sentCount',
+      'lastSentAt',
+      'nextSendAt',
+      'scheduleStartedAt'
+    ];
 
     for (const column of columns) {
       try {
@@ -68,14 +78,32 @@ async function ensureCampaignsColumns() {
           logger.info('SCHEMA', `Adding missing column: ${table}.${column}`);
 
           let columnDef = {
-            type: sequelize.Sequelize.DATE,
-            allowNull: true
+            type: sequelize.Sequelize.INTEGER,
+            allowNull: true,
+            defaultValue: null
           };
 
           if (column === 'attachments') {
             columnDef = {
               type: sequelize.Sequelize.JSON,
               defaultValue: [],
+              allowNull: true
+            };
+          } else if (column === 'dailyLimit') {
+            columnDef = {
+              type: sequelize.Sequelize.INTEGER,
+              defaultValue: 200,
+              allowNull: true
+            };
+          } else if (column === 'sentCount') {
+            columnDef = {
+              type: sequelize.Sequelize.INTEGER,
+              defaultValue: 0,
+              allowNull: true
+            };
+          } else if (column.includes('At')) {
+            columnDef = {
+              type: sequelize.Sequelize.DATE,
               allowNull: true
             };
           }
