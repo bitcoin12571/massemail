@@ -643,4 +643,48 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Schedule campaign endpoint - 200/day
+router.post('/schedule-campaign', emailSendLimiter, async (req, res) => {
+  try {
+    const { subject, message, dailyLimit, totalContacts } = req.body;
+
+    if (!subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ error: 'Subject and message are required' });
+    }
+
+    const totalDays = Math.ceil(totalContacts / dailyLimit);
+
+    // Create campaign record
+    const campaign = await Campaign.create({
+      name: `Scheduled: ${subject.substring(0, 50)}`,
+      subject: subject.trim(),
+      htmlContent: `<div style="font-family:Arial,sans-serif;line-height:1.6">${message.replaceAll('\n', '<br>')}</div>`,
+      textContent: message.trim(),
+      status: 'scheduled',
+      createdBy: req.user.id,
+      metadata: {
+        type: 'scheduled',
+        dailyLimit: dailyLimit,
+        totalContacts: totalContacts,
+        totalDays: totalDays,
+        startedAt: new Date().toISOString()
+      }
+    });
+
+    logger.info('SCHEDULE-CAMPAIGN', `Campaign ${campaign.id} scheduled for ${totalDays} days, ${dailyLimit}/day`);
+
+    res.json({
+      success: true,
+      campaignId: campaign.id,
+      campaignName: campaign.name,
+      totalDays: totalDays,
+      dailyLimit: dailyLimit,
+      totalContacts: totalContacts
+    });
+  } catch (error) {
+    logger.error('SCHEDULE-CAMPAIGN', 'Error scheduling campaign', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

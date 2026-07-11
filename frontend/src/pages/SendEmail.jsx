@@ -47,11 +47,14 @@ export default function SendEmail({ onOpenSettings }) {
   const [resultOpen, setResultOpen] = useState(false);
 
   // Auto-send state
-  const [sendMode, setSendMode] = useState('manual'); // 'manual' or 'auto'
+  const [sendMode, setSendMode] = useState('manual'); // 'manual', 'auto', or 'schedule'
   const [totalContacts, setTotalContacts] = useState(0);
   const [autoSendState, setAutoSendState] = useState({ currentBatch: 0, sentCount: 0, totalBatches: 0 });
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [scheduleStarted, setScheduleStarted] = useState(false);
+  const [scheduleDays, setScheduleDays] = useState(10);
   const BATCH_SIZE = 100;
+  const DAILY_LIMIT = 200;
 
   useEffect(() => {
     API.get('/settings/email')
@@ -283,6 +286,47 @@ export default function SendEmail({ onOpenSettings }) {
     }
   };
 
+  const startScheduling = async () => {
+    if (!subject.trim() || !message.trim()) {
+      setNotice({ type: 'error', text: 'Please enter subject and message' });
+      return;
+    }
+
+    setSending(true);
+    try {
+      const data = {
+        subject: subject.trim(),
+        message: message.trim(),
+        dailyLimit: DAILY_LIMIT,
+        totalContacts: totalContacts
+      };
+
+      const response = await API.post('/contacts/schedule-campaign', data);
+
+      setSendResult({
+        success: true,
+        campaignId: response.data.campaignId,
+        scheduledDays: Math.ceil(totalContacts / DAILY_LIMIT),
+        totalContacts: totalContacts,
+        dailyLimit: DAILY_LIMIT,
+        subject: subject
+      });
+
+      setResultOpen(true);
+      setScheduleStarted(true);
+
+      // Clear form
+      setSubject('');
+      setMessage('');
+      setFiles([]);
+      window.dispatchEvent(new Event('mailora:history-updated'));
+    } catch (error) {
+      setNotice({ type: 'error', text: getApiErrorMessage(error, 'Failed to schedule campaign') });
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <>
       <Box className="page-heading">
@@ -291,13 +335,29 @@ export default function SendEmail({ onOpenSettings }) {
           <Typography variant="h3">{t('composeTitle')}</Typography>
           <Typography color="text.secondary">{t('composeSubtitle')}</Typography>
         </Box>
-        <Button
-          variant={sendMode === 'auto' ? 'contained' : 'outlined'}
-          startIcon={<Zap size={18} />}
-          onClick={() => setSendMode(sendMode === 'auto' ? 'manual' : 'auto')}
-        >
-          {sendMode === 'auto' ? '⚡ Auto-Send ON' : '📧 Manual Send'}
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant={sendMode === 'manual' ? 'contained' : 'outlined'}
+            startIcon={<Send size={18} />}
+            onClick={() => setSendMode('manual')}
+          >
+            📧 Manual Send
+          </Button>
+          <Button
+            variant={sendMode === 'auto' ? 'contained' : 'outlined'}
+            startIcon={<Zap size={18} />}
+            onClick={() => setSendMode('auto')}
+          >
+            ⚡ Auto-Send
+          </Button>
+          <Button
+            variant={sendMode === 'schedule' ? 'contained' : 'outlined'}
+            startIcon={<motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity }}>📅</motion.div>}
+            onClick={() => setSendMode('schedule')}
+          >
+            📅 Schedule 200/day
+          </Button>
+        </Stack>
       </Box>
 
       {sendMode === 'auto' ? (
@@ -475,6 +535,108 @@ export default function SendEmail({ onOpenSettings }) {
                   sx={{ flex: 1 }}
                 >
                   {sending ? 'Sending...' : `Start Auto-Send to All ${totalContacts}`}
+                </Button>
+              </Stack>
+            </motion.div>
+          </Stack>
+        </Paper>
+      ) : sendMode === 'schedule' ? (
+        /* SCHEDULE MODE */
+        <Paper sx={{ p: 3 }}>
+          <Stack spacing={3}>
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <Box>
+                <Typography variant="h5" sx={{ mb: 1 }}>
+                  📅 Schedule Campaign - 200/day
+                </Typography>
+                <Typography color="text.secondary">
+                  Send {totalContacts} emails automatically over {scheduleDays} days
+                </Typography>
+              </Box>
+            </motion.div>
+
+            {totalContacts > 0 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+              >
+                <Box sx={{
+                  p: 2,
+                  bgcolor: '#f0f4ff',
+                  borderRadius: 1,
+                  border: '1px solid #e0e7ff'
+                }}>
+                  <Stack spacing={1}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2">Total contacts:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{totalContacts}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2">Per day:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{DAILY_LIMIT}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Typography variant="body2">Duration:</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{Math.ceil(totalContacts / DAILY_LIMIT)} days</Typography>
+                    </Box>
+                  </Stack>
+                </Box>
+              </motion.div>
+            )}
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              <TextField
+                fullWidth
+                label="Email Subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                disabled={sending}
+                multiline
+                rows={2}
+              />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+            >
+              <TextField
+                fullWidth
+                label="Email Message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                disabled={sending}
+                multiline
+                rows={10}
+                placeholder="Write your message here..."
+              />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  startIcon={sending ? <CircularProgress size={20} /> : <Send size={20} />}
+                  onClick={startScheduling}
+                  disabled={sending || totalContacts === 0 || !subject.trim() || !message.trim()}
+                  sx={{ flex: 1 }}
+                >
+                  {sending ? 'Scheduling...' : `Start Scheduling`}
                 </Button>
               </Stack>
             </motion.div>
