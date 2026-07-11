@@ -49,7 +49,7 @@ export const clearLastImportFolder = () => {
 
 /**
  * Create file input with memory of last used directory
- * This uses the File System Access API when available
+ * Uses native file picker for best UX
  */
 export const createFileInput = async (options = {}) => {
   const {
@@ -58,48 +58,8 @@ export const createFileInput = async (options = {}) => {
     onFile = () => {}
   } = options;
 
-  // Try to use File System Access API (Chrome 86+)
-  if ('showOpenFilePicker' in window) {
-    try {
-      const pickerOptions = {
-        types: accept ? [
-          {
-            description: 'Import Files',
-            accept: { 'text/csv': ['.csv'] }
-          }
-        ] : undefined,
-        multiple: multiple
-      };
-
-      const handles = await window.showOpenFilePicker(pickerOptions);
-
-      if (handles && handles.length > 0) {
-        // Save the directory of the first selected file
-        const handle = handles[0];
-        const parent = await handle.getParent?.();
-        if (parent) {
-          const folderName = parent.name;
-          saveLastImportFolder(folderName);
-        }
-
-        // Convert file handles to File objects
-        const files = await Promise.all(
-          handles.map(async (handle) => {
-            const file = await handle.getFile();
-            return file;
-          })
-        );
-
-        onFile(files);
-        return;
-      }
-    } catch (error) {
-      // User cancelled or error occurred - fallback to regular input
-      console.warn('File System Access API error:', error);
-    }
-  }
-
-  // Fallback: Regular file input
+  // Use simple, reliable native file input
+  // This provides the best cross-browser compatibility
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = accept;
@@ -108,15 +68,22 @@ export const createFileInput = async (options = {}) => {
   input.onchange = (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length > 0) {
-      // Try to extract folder info from file path (limited in browsers)
-      const filePath = files[0].webkitRelativePath || files[0].name;
-      if (filePath.includes('/')) {
-        const folderName = filePath.split('/')[0];
-        saveLastImportFolder(folderName);
+      // Save folder info when files are selected
+      try {
+        const filePath = files[0].webkitRelativePath || files[0].name;
+        if (filePath.includes('/')) {
+          const folderName = filePath.split('/')[0];
+          saveLastImportFolder(folderName);
+        }
+      } catch (error) {
+        console.warn('Error saving folder info:', error);
       }
     }
     onFile(files);
   };
+
+  // Handle cancellation
+  input.oninput = null;
 
   input.click();
 };
