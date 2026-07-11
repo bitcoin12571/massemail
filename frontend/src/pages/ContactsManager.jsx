@@ -264,13 +264,13 @@ export default function ContactsManager() {
               createFileInput({
                 accept: '.csv,text/csv',
                 multiple: true,
-                folderMode: true,
+                folderMode: false,
                 onFile: importCSV
               });
             }}
-            title="Select a folder with email files (txt/csv)"
+            title="Select multiple email files (txt/csv)"
           >
-            📁 {t('importCsv')} (Folder)
+            📁 {t('importCsv')} (Multi)
           </Button>
           <Button
             variant="outlined"
