@@ -85,7 +85,7 @@ router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 20, search } = req.query;
     const safePage = Math.max(Number.parseInt(page, 10) || 1, 1);
-    const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 500);
+    const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 10000);
     const offset = (safePage - 1) * safeLimit;
 
     // Show both user's own contacts and imported bulk contacts
