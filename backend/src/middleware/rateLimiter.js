@@ -73,7 +73,7 @@ export const bulkOperationLimiter = rateLimit({
 export const contactImportLimiter = rateLimit({
   keyGenerator: (req) => req.user?.id || req.ip,
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 50, // Max 50 imports per hour
+  max: 1000, // Max 1000 imports per hour
   message: {
     error: 'Too many contact imports'
   },
