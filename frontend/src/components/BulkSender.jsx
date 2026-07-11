@@ -362,9 +362,19 @@ export default function BulkSender() {
               helperText={t('htmlTemplateHelper')}
             />
             <Box>
-              <Button component="label" variant="outlined" startIcon={<ImagePlus size={18} />}>
+              <Button
+                variant="outlined"
+                startIcon={<ImagePlus size={18} />}
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = 'image/*';
+                  input.multiple = true;
+                  input.onchange = (e) => handleAttachmentChange(e);
+                  input.click();
+                }}
+              >
                 {t('bulkAddImage')}
-                <input hidden type="file" accept="image/*" multiple onChange={handleAttachmentChange} />
               </Button>
               {attachments.length > 0 && (
                 <Stack spacing={1} sx={{ mt: 1.25 }}>

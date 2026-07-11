@@ -208,8 +208,19 @@ export default function ContactsManager() {
           >
             {t('deleteAll')}
           </Button>
-          <Button component="label" variant="outlined" startIcon={<Upload size={18} />} disabled={loading}>
-            {t('importCsv')}<input hidden type="file" accept=".csv,text/csv" onChange={importCSV} />
+          <Button
+            variant="outlined"
+            startIcon={<Upload size={18} />}
+            disabled={loading}
+            onClick={() => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = '.csv,text/csv';
+              input.onchange = (e) => importCSV(e);
+              input.click();
+            }}
+          >
+            {t('importCsv')}
           </Button>
           <Button variant="contained" startIcon={<Plus size={18} />} disabled={loading} onClick={() => setContactDialog(true)}>{t('addEmail')}</Button>
         </Stack>
@@ -269,7 +280,19 @@ export default function ContactsManager() {
             <Typography variant="h5">{t('importTitle')}</Typography>
             <Typography color="text.secondary">{t('importHelp')}</Typography>
             <Stack direction="row" spacing={1}>
-              <Button component="label" variant="contained" startIcon={<Upload size={18} />}>{t('importCsv')}<input hidden type="file" accept=".csv,text/csv" onChange={importCSV} /></Button>
+              <Button
+                variant="contained"
+                startIcon={<Upload size={18} />}
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.csv,text/csv';
+                  input.onchange = (e) => importCSV(e);
+                  input.click();
+                }}
+              >
+                {t('importCsv')}
+              </Button>
               <Button variant="outlined" startIcon={<ContactRound size={18} />} onClick={() => setContactDialog(true)}>{t('addEmail')}</Button>
             </Stack>
           </Box>

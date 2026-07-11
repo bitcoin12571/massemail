@@ -302,13 +302,32 @@ export default function SendEmail({ onOpenSettings }) {
                 <Typography variant="body2" color="text.secondary">{t('attachmentsHelp')}</Typography>
               </Box>
               <Box className="attachment-buttons">
-                <Button component="label" variant="outlined" startIcon={<Image size={17} />}>
+                <Button
+                  variant="outlined"
+                  startIcon={<Image size={17} />}
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.multiple = true;
+                    input.onchange = (e) => addFiles(e);
+                    input.click();
+                  }}
+                >
                   {t('addPhoto')}
-                  <input hidden multiple type="file" accept="image/*" onChange={addFiles} />
                 </Button>
-                <Button component="label" variant="outlined" startIcon={<Paperclip size={17} />}>
+                <Button
+                  variant="outlined"
+                  startIcon={<Paperclip size={17} />}
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.multiple = true;
+                    input.onchange = (e) => addFiles(e);
+                    input.click();
+                  }}
+                >
                   {t('addFile')}
-                  <input hidden multiple type="file" onChange={addFiles} />
                 </Button>
               </Box>
             </Box>
