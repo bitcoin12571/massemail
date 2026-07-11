@@ -110,26 +110,75 @@ export default function ContactsManager() {
   };
 
   const importCSV = async (files) => {
-    const file = Array.isArray(files) ? files[0] : files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setNotice({ type: 'error', text: t('csvTooLarge') });
-      return;
-    }
+    const fileList = Array.isArray(files) ? files : [files];
+    if (!fileList.length) return;
+
     setLoading(true);
     try {
-      const csvData = await file.text();
-      const lines = csvData.split(/\r?\n/).filter(line => line.trim());
-      const headers = lines.shift()?.split(',').map(value => value.trim().toLowerCase()) || [];
-      const emailIndex = headers.indexOf('email');
-      const nameIndex = headers.indexOf('name');
-      const importedContacts = lines.map(line => {
-        const values = line.split(',').map(value => value.trim());
-        return { email: values[emailIndex], name: nameIndex >= 0 ? values[nameIndex] : '' };
-      }).filter(contact => contact.email);
-      await API.post('/contacts/import', { csvData });
-      setNotice({ type: 'success', text: t('imported', { imported: importedContacts.length, total: importedContacts.length }) });
-      load();
+      let totalImported = 0;
+      let totalEmails = 0;
+
+      // Process all files
+      for (const file of fileList) {
+        if (file.size > 5 * 1024 * 1024) {
+          setNotice({ type: 'warning', text: t('csvTooLarge') + ': ' + file.name });
+          continue;
+        }
+
+        try {
+          const csvData = await file.text();
+          const lines = csvData.split(/\r?\n/).filter(line => line.trim());
+
+          // Try to parse as CSV with headers first
+          let importedContacts = [];
+          if (lines.length > 0) {
+            const firstLine = lines[0];
+
+            // Check if it looks like a header row
+            if (firstLine.toLowerCase().includes('email') || firstLine.toLowerCase().includes('mail')) {
+              // CSV format with headers
+              const headers = lines.shift()?.split(',').map(value => value.trim().toLowerCase()) || [];
+              const emailIndex = headers.indexOf('email');
+              const nameIndex = headers.indexOf('name');
+
+              importedContacts = lines.map(line => {
+                const values = line.split(',').map(value => value.trim());
+                return {
+                  email: values[emailIndex],
+                  name: nameIndex >= 0 ? values[nameIndex] : ''
+                };
+              }).filter(contact => contact.email);
+            } else {
+              // Simple email list (one email per line)
+              importedContacts = lines
+                .filter(line => line.includes('@'))
+                .map(line => ({
+                  email: line.trim(),
+                  name: ''
+                }));
+            }
+          }
+
+          if (importedContacts.length > 0) {
+            await API.post('/contacts/import', { csvData });
+            totalImported += importedContacts.length;
+            totalEmails += importedContacts.length;
+          }
+        } catch (fileError) {
+          console.warn('Error processing file ' + file.name + ':', fileError);
+        }
+      }
+
+      if (totalImported > 0) {
+        setNotice({
+          type: 'success',
+          text: t('imported', { imported: totalImported, total: fileList.length }) +
+                ' (' + totalEmails + ' emails)'
+        });
+        load();
+      } else {
+        setNotice({ type: 'error', text: t('csvImportFailed') });
+      }
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, t('csvImportFailed')) });
     } finally {
@@ -214,12 +263,28 @@ export default function ContactsManager() {
             onClick={() => {
               createFileInput({
                 accept: '.csv,text/csv',
+                multiple: true,
+                folderMode: true,
+                onFile: importCSV
+              });
+            }}
+            title="Select a folder with email files (txt/csv)"
+          >
+            📁 {t('importCsv')} (Folder)
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<Upload size={18} />}
+            disabled={loading}
+            onClick={() => {
+              createFileInput({
+                accept: '.csv,text/csv',
                 multiple: false,
                 onFile: importCSV
               });
             }}
           >
-            {t('importCsv')}
+            {t('importCsv')} (File)
           </Button>
           <Button variant="contained" startIcon={<Plus size={18} />} disabled={loading} onClick={() => setContactDialog(true)}>{t('addEmail')}</Button>
         </Stack>

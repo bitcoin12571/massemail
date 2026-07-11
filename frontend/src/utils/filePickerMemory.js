@@ -7,11 +7,56 @@ export const createFileInput = async (options = {}) => {
   const {
     accept = '',
     multiple = false,
-    onFile = () => {}
+    onFile = () {},
+    folderMode = false // New option to pick folders instead of files
   } = options;
 
   // Try File System Access API first (Chrome/Edge) - shows proper file explorer dialog
-  if ('showOpenFilePicker' in window) {
+  if (folderMode && 'showDirectoryPicker' in window) {
+    // Folder picker mode (Chrome 86+)
+    try {
+      const dirHandle = await window.showDirectoryPicker();
+
+      // Recursively read all text/csv files from the folder
+      const files = [];
+
+      const readDirRecursive = async (handle) => {
+        try {
+          for await (const entry of handle.values()) {
+            if (entry.kind === 'file') {
+              // Only include text and CSV files
+              if (entry.name.endsWith('.txt') || entry.name.endsWith('.csv')) {
+                const file = await entry.getFile();
+                files.push(file);
+              }
+            } else if (entry.kind === 'directory') {
+              // Recursively read subdirectories
+              await readDirRecursive(entry);
+            }
+          }
+        } catch (error) {
+          console.warn('Error reading directory:', error);
+        }
+      };
+
+      await readDirRecursive(dirHandle);
+
+      if (files.length > 0) {
+        onFile(files);
+      } else {
+        console.log('No text or CSV files found in folder');
+      }
+      return;
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Folder picker cancelled by user');
+        return;
+      }
+      console.warn('Folder picker error:', error);
+    }
+  }
+
+  if ('showOpenFilePicker' in window && !folderMode) {
     try {
       const pickerOptions = {
         multiple: multiple,
@@ -67,9 +112,22 @@ export const createFileInput = async (options = {}) => {
   input.accept = accept;
   input.multiple = multiple;
 
+  // For folder selection fallback (limited support)
+  if (folderMode) {
+    input.webkitdirectory = true;
+    input.mozdirectory = true;
+  }
+
   input.onchange = (e) => {
     const files = Array.from(e.target.files || []);
-    onFile(files);
+
+    // Filter for text/csv files if in folder mode
+    if (folderMode) {
+      const filtered = files.filter(f => f.name.endsWith('.txt') || f.name.endsWith('.csv'));
+      onFile(filtered);
+    } else {
+      onFile(files);
+    }
   };
 
   input.click();
