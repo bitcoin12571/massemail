@@ -110,8 +110,13 @@ export default function ContactsManager() {
   };
 
   const importCSV = async (files) => {
+    console.log(`🔍 importCSV called with:`, files);
     const fileList = Array.isArray(files) ? files : [files];
-    if (!fileList.length) return;
+    console.log(`📂 FileList length:`, fileList.length);
+    if (!fileList.length) {
+      console.warn('❌ No files in list!');
+      return;
+    }
 
     setLoading(true);
     try {
@@ -120,14 +125,25 @@ export default function ContactsManager() {
 
       // Process all files
       for (const file of fileList) {
+        console.log(`\n📄 Processing file:`, file.name, `(${file.size} bytes)`);
         if (file.size > 5 * 1024 * 1024) {
+          console.warn(`   ⚠️  File too large: ${file.size} bytes`);
           setNotice({ type: 'warning', text: t('csvTooLarge') + ': ' + file.name });
           continue;
         }
 
         try {
+          console.log(`   📖 Reading file text...`);
           const csvData = await file.text();
+          console.log(`   ✅ File read successfully: ${csvData.length} characters`);
+          console.log(`📄 File read: ${file.name}, size: ${file.size}, data length: ${csvData.length}`);
+
           const lines = csvData.split(/\r?\n/).filter(line => line.trim());
+          console.log(`📝 Lines after split: ${lines.length}`);
+          if (lines.length > 0) {
+            console.log(`   First line: "${lines[0]}"`);
+            console.log(`   Second line: "${lines[1] || 'N/A'}"`);
+          }
 
           // Try to parse as CSV with headers first
           let importedContacts = [];
@@ -136,10 +152,13 @@ export default function ContactsManager() {
 
             // Check if it looks like a header row
             if (firstLine.toLowerCase().includes('email') || firstLine.toLowerCase().includes('mail')) {
+              console.log(`✅ Header detected: "${firstLine}"`);
               // CSV format with headers
               const headers = lines.shift()?.split(',').map(value => value.trim().toLowerCase()) || [];
+              console.log(`   Headers: [${headers.join(', ')}]`);
               const emailIndex = headers.indexOf('email');
               const nameIndex = headers.indexOf('name');
+              console.log(`   Email column index: ${emailIndex}`);
 
               importedContacts = lines.map(line => {
                 const values = line.split(',').map(value => value.trim());
@@ -148,7 +167,10 @@ export default function ContactsManager() {
                   name: nameIndex >= 0 ? values[nameIndex] : ''
                 };
               }).filter(contact => contact.email);
+
+              console.log(`   Parsed contacts: ${importedContacts.length}`);
             } else {
+              console.log(`📋 Plain list format detected`);
               // Simple email list (one email per line)
               importedContacts = lines
                 .filter(line => line.includes('@'))
@@ -156,13 +178,30 @@ export default function ContactsManager() {
                   email: line.trim(),
                   name: ''
                 }));
+              console.log(`   Parsed contacts: ${importedContacts.length}`);
             }
           }
 
           if (importedContacts.length > 0) {
-            await API.post('/contacts/import', { csvData });
-            totalImported += importedContacts.length;
-            totalEmails += importedContacts.length;
+            try {
+              console.log(`📤 Sending ${importedContacts.length} contacts to API...`);
+              console.log(`   CSV data size: ${csvData.length} bytes`);
+              console.log(`   Payload: { csvData: "${csvData.substring(0, 100)}..." }`);
+
+              const importResponse = await API.post('/contacts/import', { csvData });
+              console.log(`✅ Import successful:`, importResponse.data);
+
+              totalImported += importResponse.data?.imported || importedContacts.length;
+              totalEmails += importedContacts.length;
+            } catch (importError) {
+              console.error('❌ Import API error:');
+              console.error('   Status:', importError.response?.status);
+              console.error('   Data:', importError.response?.data);
+              console.error('   Message:', importError.message);
+              throw importError;
+            }
+          } else {
+            console.warn('No contacts parsed from file:', file.name);
           }
         } catch (fileError) {
           console.warn('Error processing file ' + file.name + ':', fileError);
@@ -177,7 +216,10 @@ export default function ContactsManager() {
         });
         load();
       } else {
-        setNotice({ type: 'error', text: t('csvImportFailed') });
+        setNotice({
+          type: 'error',
+          text: `${t('csvImportFailed')} (Imported: ${totalImported}, Files: ${fileList.length})`
+        });
       }
     } catch (error) {
       setNotice({ type: 'error', text: getApiErrorMessage(error, t('csvImportFailed')) });

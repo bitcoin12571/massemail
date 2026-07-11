@@ -6,17 +6,23 @@ import {
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogContent,
   DialogTitle,
   InputAdornment,
   LinearProgress,
   Paper,
+  Skeleton,
   Snackbar,
+  Stack,
+  ToggleButton,
+  ToggleButtonGroup,
   TextField,
   Typography
 } from '@mui/material';
-import { CheckCircle, Eye, File, Image, Paperclip, Search, Send, Sparkles, UsersRound, X } from 'lucide-react';
+import { CheckCircle, Eye, File, Image, Paperclip, Search, Send, Sparkles, UsersRound, X, Zap } from 'lucide-react';
+import { motion } from 'framer-motion';
 import API, { getApiErrorMessage } from '../services/api';
 import { useLanguage } from '../i18n.jsx';
 import { EmailPreviewModalCompose } from '../components/EmailPreviewModalCompose.jsx';
@@ -40,11 +46,39 @@ export default function SendEmail({ onOpenSettings }) {
   const [sendResult, setSendResult] = useState(null);
   const [resultOpen, setResultOpen] = useState(false);
 
+  // Auto-send state
+  const [sendMode, setSendMode] = useState('manual'); // 'manual' or 'auto'
+  const [totalContacts, setTotalContacts] = useState(0);
+  const [autoSendState, setAutoSendState] = useState({ currentBatch: 0, sentCount: 0, totalBatches: 0 });
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const BATCH_SIZE = 100;
+
   useEffect(() => {
     API.get('/settings/email')
       .then(({ data }) => setDeliveryMode(data.provider))
       .catch(() => setDeliveryMode('preview'));
   }, []);
+
+  // Load total contacts when auto mode is enabled
+  useEffect(() => {
+    if (sendMode === 'auto') {
+      setIsLoadingContacts(true);
+      API.get('/contacts', { params: { limit: 1 } })
+        .then(({ data }) => {
+          setTotalContacts(data.total || 0);
+          const batches = Math.ceil((data.total || 0) / BATCH_SIZE);
+          setAutoSendState(prev => ({
+            ...prev,
+            totalBatches: batches
+          }));
+        })
+        .catch(error => {
+          console.error('Failed to load contacts:', error);
+          setNotice({ type: 'error', text: 'Failed to load contacts' });
+        })
+        .finally(() => setIsLoadingContacts(false));
+    }
+  }, [sendMode]);
 
   useEffect(() => {
     const timeout = setTimeout(async () => {
@@ -172,6 +206,16 @@ export default function SendEmail({ onOpenSettings }) {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
+      // Update batch progress
+      const batchInfo = localStorage.getItem('mailioraBatchInfo');
+      if (batchInfo) {
+        const info = JSON.parse(batchInfo);
+        const batchProgress = JSON.parse(localStorage.getItem('mailioraBatchProgress') || '{"sent": 0, "batchSize": 100}');
+        batchProgress.sent = info.batchEnd;
+        localStorage.setItem('mailioraBatchProgress', JSON.stringify(batchProgress));
+        localStorage.removeItem('mailioraBatchInfo');
+      }
+
       // Show success result
       setSendResult({
         success: true,
@@ -207,9 +251,198 @@ export default function SendEmail({ onOpenSettings }) {
           <Typography variant="h3">{t('composeTitle')}</Typography>
           <Typography color="text.secondary">{t('composeSubtitle')}</Typography>
         </Box>
+        <Button
+          variant={sendMode === 'auto' ? 'contained' : 'outlined'}
+          startIcon={<Zap size={18} />}
+          onClick={() => setSendMode(sendMode === 'auto' ? 'manual' : 'auto')}
+        >
+          {sendMode === 'auto' ? '⚡ Auto-Send ON' : '📧 Manual Send'}
+        </Button>
       </Box>
 
-      <Box className="send-composer-grid">
+      {sendMode === 'auto' ? (
+        /* AUTO-SEND MODE */
+        <Paper sx={{ p: 3 }}>
+          <Stack spacing={3}>
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
+              <Box>
+                <Typography variant="h5" sx={{ mb: 1 }}>
+                  ⚡ Auto-Send to All {totalContacts} Contacts
+                </Typography>
+                <Typography color="text.secondary">
+                  Automatically send emails in batches of {BATCH_SIZE}
+                </Typography>
+              </Box>
+            </motion.div>
+
+            {totalContacts > 0 && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+              >
+                <Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="subtitle2">
+                      📊 Progress: {autoSendState.sentCount}/{totalContacts}
+                    </Typography>
+                    <Typography variant="subtitle2">
+                      {autoSendState.totalBatches > 0
+                        ? `${Math.round((autoSendState.sentCount / totalContacts) * 100)}% (${autoSendState.currentBatch}/${autoSendState.totalBatches} batches)`
+                        : 'Loading...'}
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={totalContacts > 0 ? (autoSendState.sentCount / totalContacts) * 100 : 0}
+                    sx={{ height: 10, borderRadius: 1 }}
+                  />
+                </Box>
+              </motion.div>
+            )}
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              <TextField
+                fullWidth
+                label="Email Subject"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                disabled={sending}
+                multiline
+                rows={2}
+              />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+            >
+              <TextField
+                fullWidth
+                label="Email Message"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                disabled={sending}
+                multiline
+                rows={10}
+                placeholder="Write your message here..."
+              />
+            </motion.div>
+
+            {/* Attachments */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.35 }}
+            >
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 700 }}>📎 Attachments</Typography>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  size="large"
+                  startIcon={<Image size={20} />}
+                  onClick={() => createFileInput({
+                    accept: 'image/*',
+                    onFile: (selectedFiles) => {
+                      if (selectedFiles[0]) {
+                        addFiles([selectedFiles[0]]);
+                      }
+                    }
+                  })}
+                  disabled={sending}
+                  sx={{ minWidth: 150 }}
+                >
+                  📷 Add Photo
+                </Button>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  size="large"
+                  startIcon={<Paperclip size={20} />}
+                  onClick={() => createFileInput({
+                    accept: '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt',
+                    onFile: (selectedFiles) => {
+                      if (selectedFiles[0]) {
+                        addFiles([selectedFiles[0]]);
+                      }
+                    }
+                  })}
+                  disabled={sending}
+                  sx={{ minWidth: 150 }}
+                >
+                  📎 Add File
+                </Button>
+              </Box>
+
+              {/* Show attached files */}
+              {files.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    📁 Attached Files ({files.length}):
+                  </Typography>
+                  <Stack spacing={1}>
+                    {files.map((file, index) => (
+                      <Box
+                        key={index}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          p: 1,
+                          bgcolor: '#f3f4f6',
+                          borderRadius: 1
+                        }}
+                      >
+                        <Typography variant="body2">
+                          {file.name} ({(file.size / 1024).toFixed(2)} KB)
+                        </Typography>
+                        <Button
+                          size="small"
+                          onClick={() => setFiles(current => current.filter((_, i) => i !== index))}
+                          startIcon={<X size={16} />}
+                        >
+                          Remove
+                        </Button>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  startIcon={sending ? <CircularProgress size={20} /> : <Send size={20} />}
+                  onClick={send}
+                  disabled={sending || totalContacts === 0 || !subject.trim() || !message.trim()}
+                  sx={{ flex: 1 }}
+                >
+                  {sending ? 'Sending...' : 'Start Auto-Send'}
+                </Button>
+              </Stack>
+            </motion.div>
+          </Stack>
+        </Paper>
+      ) : (
+        /* MANUAL MODE */
+        <Box className="send-composer-grid">
         <Paper className="recipient-selector">
           <Box className="composer-panel-head">
             <Box>
@@ -355,6 +588,7 @@ export default function SendEmail({ onOpenSettings }) {
           </Box>
         </Paper>
       </Box>
+      )}
 
       <EmailPreviewModalCompose
         open={previewOpen}

@@ -193,19 +193,29 @@ router.post('/import', contactImportLimiter, async (req, res) => {
   try {
     const { csvData } = req.body;
 
+    logger.info('CONTACT_IMPORT', `Import request received, data size: ${csvData?.length || 0} bytes`);
+    logger.info('CONTACT_IMPORT', `CSV data type: ${typeof csvData}`);
+    logger.info('CONTACT_IMPORT', `First 200 chars: ${csvData?.substring(0, 200) || 'EMPTY'}`);
+    logger.info('CONTACT_IMPORT', `Contains 'email': ${csvData?.includes('email') ? 'YES' : 'NO'}`);
+    logger.info('CONTACT_IMPORT', `Contains '@': ${csvData?.includes('@') ? 'YES' : 'NO'}`);
+
     // Validate CSV data size to prevent memory exhaustion
     if (!csvData || typeof csvData !== 'string') {
+      logger.warn('CONTACT_IMPORT', 'CSV data missing or not a string');
       return res.status(400).json({ error: 'CSV data must be a string' });
     }
     if (csvData.length > 5 * 1024 * 1024) { // 5MB limit
+      logger.warn('CONTACT_IMPORT', `CSV file too large: ${csvData.length} bytes`);
       return res.status(413).json({ error: 'CSV file is too large (max 5MB)' });
     }
 
     let parsed;
     try {
       parsed = parseCSV(csvData);
+      logger.info('CONTACT_IMPORT', `CSV parsed: ${parsed.length} contacts extracted`);
     } catch (parseError) {
       // Catch CSV parsing errors specifically
+      logger.warn('CONTACT_IMPORT', `CSV parsing error: ${parseError.message}`);
       return res.status(400).json({
         error: `CSV parsing error: ${parseError.message}`,
         help: 'Make sure CSV has an email column and is properly formatted'
@@ -215,11 +225,14 @@ router.post('/import', contactImportLimiter, async (req, res) => {
     // Validate emails before bulk create
     const invalid = parsed.filter(c => !isValidEmail(c.email));
     if (invalid.length > 0) {
+      logger.warn('CONTACT_IMPORT', `Found ${invalid.length} invalid emails`);
       return res.status(400).json({
         error: `Found ${invalid.length} invalid email(s). Please fix them and try again.`,
         invalidEmails: invalid.slice(0, 5).map(c => c.email)
       });
     }
+
+    logger.info('CONTACT_IMPORT', `All ${parsed.length} emails valid, proceeding to bulk create`);
 
     const contacts = parsed.map((contact) => ({
       ...contact,
@@ -228,8 +241,10 @@ router.post('/import', contactImportLimiter, async (req, res) => {
       createdBy: req.user.id
     }));
 
+    logger.info('CONTACT_IMPORT', `Bulk creating ${contacts.length} contacts...`);
     const created = await Contact.bulkCreate(contacts, { ignoreDuplicates: true });
 
+    logger.info('CONTACT_IMPORT', `Success! Created ${created.length} / ${contacts.length} contacts`);
     res.json({ imported: created.length, total: contacts.length });
   } catch (error) {
     logger.error('CONTACT_IMPORT', 'Unexpected error', error);

@@ -1,0 +1,59 @@
+═══════════════════════════════════════════════════════════════════════════════
+  EMAIL BULK IMPORT GUIDE - 2020 EMAILS READY
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ CSV FILE READY
+  Location: C:\email-dashboard\bulk-emails.csv
+  Total: 2020 valid email addresses
+  Format: email (header) + one email per line
+  Status: Ready for import
+
+📱 HOW TO IMPORT
+
+  1. Open: https://email-dashboard-nine-brown.vercel.app
+
+  2. Login with your account
+
+  3. Go to: Dashboard → Contacts → Database
+
+  4. Click: "📁 Importă CSV (Multi)" button
+
+  5. Select: C:\email-dashboard\bulk-emails.csv
+
+  6. Wait: Import completes (should be fast - only 40 KB file)
+
+  7. Check: Look for success message showing number imported
+
+✨ WHAT TO EXPECT
+
+  - Import should complete in a few seconds
+  - You should see: "Imported: 2020" (or similar message)
+  - All 2020 emails will appear in your Contacts list
+  - Emails are ready to use immediately for campaigns
+  - No waiting for verification needed
+
+🔧 TROUBLESHOOTING
+
+  If import fails:
+
+  1. Refresh the page and try again
+  2. Check browser console (F12 → Console tab) for errors
+  3. Make sure you're logged in
+  4. Verify internet connection is stable
+  5. Try importing a smaller batch first to test
+
+  If you see "rate limit" error:
+  - Wait 1 hour and try again
+  - Rate limit is: 1000 imports per hour maximum
+
+📊 VERIFY IMPORT
+
+  After import:
+  1. Contacts page should show total count > 2000
+  2. You can search for any email to verify it's there
+  3. Test with: "agroinform@agroinform.md" (first email in list)
+  4. Or: "cheska7676@mail.ru" (last email in list)
+
+═══════════════════════════════════════════════════════════════════════════════
+  Questions? The CSV file is at: C:\email-dashboard\bulk-emails.csv
+═══════════════════════════════════════════════════════════════════════════════
