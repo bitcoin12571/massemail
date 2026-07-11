@@ -243,6 +243,46 @@ export default function SendEmail({ onOpenSettings }) {
     }
   };
 
+  const sendAutoMode = async () => {
+    setSending(true);
+    try {
+      const data = new FormData();
+      // Send to ALL contacts - no need to select manually
+      data.append('sendToAll', 'true');
+      data.append('subject', subject);
+      data.append('message', message);
+      files.forEach((file) => data.append('attachments', file));
+
+      const response = await API.post('/contacts/send-now', data, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      // Show success result
+      setSendResult({
+        success: true,
+        sentCount: response.data.sentCount,
+        recipientCount: response.data.recipientCount,
+        failedCount: response.data.failedCount || 0,
+        subject: subject,
+        filesCount: files.length,
+        campaignId: response.data.campaignId
+      });
+
+      window.dispatchEvent(new Event('mailora:history-updated'));
+      setResultOpen(true);
+
+      // Clear form
+      setSubject('');
+      setMessage('');
+      setFiles([]);
+      setAutoSendState({ currentBatch: 0, sentCount: 0, totalBatches: 0 });
+    } catch (error) {
+      setNotice({ type: 'error', text: getApiErrorMessage(error, t('sendFailed')) });
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <>
       <Box className="page-heading">
@@ -430,11 +470,11 @@ export default function SendEmail({ onOpenSettings }) {
                   variant="contained"
                   size="large"
                   startIcon={sending ? <CircularProgress size={20} /> : <Send size={20} />}
-                  onClick={send}
+                  onClick={sendAutoMode}
                   disabled={sending || totalContacts === 0 || !subject.trim() || !message.trim()}
                   sx={{ flex: 1 }}
                 >
-                  {sending ? 'Sending...' : 'Start Auto-Send'}
+                  {sending ? 'Sending...' : `Start Auto-Send to All ${totalContacts}`}
                 </Button>
               </Stack>
             </motion.div>

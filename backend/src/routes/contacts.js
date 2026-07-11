@@ -257,14 +257,36 @@ router.post('/send-now', emailSendLimiter, attachmentUpload.array('attachments',
     logger.debug('SEND-NOW', 'Request received');
     logger.debug('SEND-NOW', `User: ${req.user?.id}, Body keys: ${Object.keys(req.body).join(', ')}`);
 
-    // Minimal logging for speed
-    const contactIds = typeof req.body.contactIds === 'string'
-      ? JSON.parse(req.body.contactIds)
-      : req.body.contactIds;
-    const recipientSnapshots = typeof req.body.recipients === 'string'
-      ? JSON.parse(req.body.recipients)
-      : req.body.recipients;
-    const { subject, message } = req.body;
+    const { subject, message, sendToAll } = req.body;
+    let contactIds = [];
+    let recipientSnapshots = [];
+
+    // If sendToAll is true, fetch all contacts
+    if (sendToAll === 'true' || sendToAll === true) {
+      logger.debug('SEND-NOW', 'Send to ALL mode activated');
+      const allContacts = await Contact.findAll({
+        where: {
+          createdBy: req.user.id,
+          status: 'active'
+        }
+      });
+      contactIds = allContacts.map(c => c.id);
+      recipientSnapshots = allContacts.map(c => ({
+        id: c.id,
+        email: c.email,
+        name: c.name,
+        status: c.status
+      }));
+      logger.debug('SEND-NOW', `Found ${contactIds.length} contacts to send to`);
+    } else {
+      // Original behavior: parse from request body
+      contactIds = typeof req.body.contactIds === 'string'
+        ? JSON.parse(req.body.contactIds)
+        : req.body.contactIds;
+      recipientSnapshots = typeof req.body.recipients === 'string'
+        ? JSON.parse(req.body.recipients)
+        : req.body.recipients;
+    }
 
     logger.debug('SEND-NOW', `Prepared ${contactIds.length} recipient(s)`);
 
