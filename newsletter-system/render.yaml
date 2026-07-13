@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: newsletter-backend
+    runtime: node
+    buildCommand: "cd backend && npm install"
+    startCommand: "cd backend && node src/server.js"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        fromDatabase:
+          name: newsletter-db
+          property: connectionString
