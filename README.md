@@ -1,353 +1,365 @@
-# 📧 Email Dashboard
+# 📬 Newsletter System - Automated Email Marketing Platform
 
-A **modern, animated email management system** for sending bulk emails with real-time delivery tracking.
+Un sistem complet și funcțional de newsletter cu generare automată de conținut AI, planificare zilnică, și management de abonați.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![Node](https://img.shields.io/badge/node-16%2B-green)
-![License](https://img.shields.io/badge/license-Internal-red)
+## ✨ Funcționalități
 
----
-
-## ✨ Features
-
-### Core Functionality
-- 📬 **Email Database** - Add/import contacts (CSV support)
-- ✉️ **Bulk Email Sending** - Send to multiple recipients with one click
-- 📊 **Real-time Tracking** - Monitor email delivery status live
-- 📈 **Performance Metrics** - Charts and analytics
-- ⚙️ **Multiple Email Providers** - SMTP, Gmail, Outlook, SendGrid, Mailgun
-
-### UI/UX Features
-- 🎨 **Smooth Animations** - Framer Motion powered transitions
-- 🌍 **Multi-language** - Romanian, Russian, English (auto-saved)
-- 💾 **Persistent Settings** - All preferences saved to localStorage
-- ⚡ **Configurable Refresh** - 2.5s to 30s auto-refresh or manual
-- 📱 **Responsive Design** - Works on desktop and tablet
-- 🎭 **Animated Charts** - Recharts with smooth data visualizations
-
-### Advanced Features
-- 🔐 **Email Verification** - Confirm emails before sending
-- 📧 **Contact Management** - CRUD operations on contact database
-- 🚀 **Email Queue** - Background processing with retry logic
-- 🎯 **Campaign Management** - Create, schedule, and track campaigns
-- 🔔 **System Status** - Monitor service health
+- ✅ **Generare AI automată** - Creează articole și imagini cu ChatGPT + DALL-E
+- ✅ **Editor complet** - Editează text și imagini, regenerează conținut
+- ✅ **Planificare automată** - Trimite newsletter la ora stabilită zilnic
+- ✅ **Trimitere email** - SendGrid integration pentru trimitere la mii de abonați
+- ✅ **Dashboard modern** - Interfață responsivă și ușor de folosit
+- ✅ **Gestionare abonați** - Adaugă, și gestionează lista de abonați
+- ✅ **Tracking** - Urmărește opens și clicks (via SendGrid)
 
 ---
 
-## 🛠️ Tech Stack
+## 🚀 Quick Start (5 minute)
 
-### Backend
-- **Node.js** + Express.js
-- **SQLite** (Sequelize ORM)
-- **Bull** (Job Queue)
-- **Nodemailer** (Email delivery)
+### 1. **Prerequisite: API Keys**
 
-### Frontend
-- **React 18**
-- **Vite** (Build tool)
-- **Material-UI** (Components)
-- **Framer Motion** (Animations)
-- **Recharts** (Charts)
-- **Lucide React** (Icons)
+Ai nevoie de 3 API keys:
 
----
+#### OpenAI (ChatGPT + DALL-E)
+1. Mergi la https://platform.openai.com/api-keys
+2. Creează un API key nou
+3. Salvează-l în `.env` backend ca `OPENAI_API_KEY=sk-...`
 
-## 📦 Quick Start
+#### SendGrid (Email Sending)
+1. Mergi la https://sendgrid.com (creează cont gratuit)
+2. Settings → API Keys → Create API Key
+3. Alege "Mail Send" permissions
+4. Salvează-l ca `SENDGRID_API_KEY=SG....`
+5. Verifică un sender email și salvează-l ca `FROM_EMAIL=noreply@yourcompany.com`
 
-### 1. Install Dependencies
+#### MongoDB (Database)
+1. Mergi la https://www.mongodb.com/cloud/atlas
+2. Creează un free cluster
+3. Generează connection string
+4. Salvează-l ca `MONGODB_URI=mongodb+srv://...`
+
+### 2. **Backend Setup**
+
 ```bash
-# Backend
-cd backend
+cd newsletter-system/backend
+
+# 1. Copy .env example și editează cu API keys
+cp .env.example .env
+# Editează .env și adaugă:
+# - OPENAI_API_KEY=sk-...
+# - SENDGRID_API_KEY=SG....
+# - FROM_EMAIL=...
+# - MONGODB_URI=...
+
+# 2. Install dependencies
 npm install
+
+# 3. Start server
+npm run dev
+# ✅ Server running on port 5000
+```
+
+### 3. **Frontend Setup** (alt tab/terminal)
+
+```bash
+cd newsletter-system/frontend
+
+# 1. Install dependencies
+npm install
+
+# 2. Start dev server
+npm run dev
+# ✅ Frontend running on http://localhost:3000
+```
+
+### 4. **Open Browser**
+```
+http://localhost:3000
+```
+
+### 5. **Create Account & Test**
+- Register cu email și parolă
+- Creează newsletter cu topic "AI News"
+- Trimite email-ul tău la /api/subscriptions
+- Trimite newsletter
+
+---
+
+## 📋 API Endpoints
+
+### **Authentication**
+```
+POST   /api/auth/register          - Create account
+POST   /api/auth/login             - Login
+GET    /api/auth/me                - Current user
+PUT    /api/auth/schedule          - Update schedule
+```
+
+### **Newsletters**
+```
+POST   /api/newsletters/generate   - Generate with AI
+GET    /api/newsletters            - List all
+GET    /api/newsletters/:id        - Get single
+PUT    /api/newsletters/:id        - Edit
+POST   /api/newsletters/:id/send   - Send now
+POST   /api/newsletters/:id/schedule - Schedule for later
+POST   /api/newsletters/:id/regenerate-text/:index   - Regenerate article text
+POST   /api/newsletters/:id/regenerate-image/:index  - Regenerate article image
+DELETE /api/newsletters/:id        - Delete
+```
+
+### **Subscribers**
+```
+GET    /api/subscriptions          - List all
+POST   /api/subscriptions          - Add new
+POST   /api/subscriptions/:id/unsubscribe - Remove
+```
+
+### **Admin**
+```
+GET    /api/admin/stats            - Dashboard stats
+GET    /api/admin/scheduler-status - Scheduler info
+```
+
+---
+
+## 🔧 Configuration
+
+### **.env (Backend)**
+```bash
+# Database
+MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/newsletter
+
+# OpenAI
+OPENAI_API_KEY=sk-your-key-here
+
+# SendGrid
+SENDGRID_API_KEY=SG.your-key-here
+FROM_EMAIL=newsletter@yourcompany.com
+
+# Server
+PORT=5000
+NODE_ENV=development
+
+# JWT
+JWT_SECRET=change_me_to_random_string
+
+# Scheduler
+DEFAULT_SCHEDULE_TIME=09:00
+DEFAULT_TIMEZONE=UTC
 
 # Frontend
-cd frontend
-npm install
+FRONTEND_URL=http://localhost:3000
 ```
 
-### 2. Configure Email Provider
-Edit `backend/.env`:
-```env
-EMAIL_PROVIDER=smtp
-SMTP_HOST=smtp.mailgun.org
-SMTP_PORT=587
-SMTP_USER=your_email@mailgun.org
-SMTP_PASS=your_password
-EMAIL_FROM=noreply@mailgun.org
+---
+
+## 📅 How Automatic Scheduler Works
+
+1. **User seteaza ora** (ex: 09:00)
+2. **Server porneaza cron job** la ora specificata zilnic
+3. **Scheduler cauta newsletter-uri "scheduled"** cu `status='scheduled'`
+4. **Trimite la toti abonati activi** via SendGrid
+5. **Actualizeaza status** la "sent"
+6. **Logs everything** in console
+
+### Exemplu: Testare Scheduler
+
+```javascript
+// 1. Seteaza ora la "current_time + 1 minute"
+PUT /api/auth/schedule
+{ "scheduleTime": "14:25", "timezone": "UTC" }
+
+// 2. Creeaza newsletter
+POST /api/newsletters/generate
+{ "topic": "Test News", ... }
+
+// 3. Seteaza-l sa fie trimis la ora asta
+POST /api/newsletters/:id/schedule
+{ "scheduledFor": "2024-07-13T14:25:00Z" }
+
+// 4. Asteapta... Ar trebui sa se declanșeze automat
+// Verifica console logs: "✅ Newsletter sent to X subscribers"
 ```
 
-Or use **Preview Mode** (no real emails):
-```env
-EMAIL_PROVIDER=preview
-```
+---
 
-### 3. Start Servers
+## 🚀 Production Deployment
+
+### **Option 1: Render (Recommended)**
+
+#### Backend (Render)
+1. Push code la GitHub
+2. Mergi la https://render.com
+3. New → Web Service
+4. Connect GitHub repo
+5. Set Environment Variables (din .env)
+6. Deploy (auto pe fiecare push)
+7. Copy Deploy URL
+
+#### Frontend (Vercel)
+1. Mergi la https://vercel.com
+2. Import GitHub repo
+3. Set `VITE_API_URL=https://your-backend.onrender.com`
+4. Deploy
+
+#### Database (MongoDB Atlas)
+- Usa free tier (512MB plenty)
+- IP whitelist: Add 0.0.0.0/0 for Render
+
+### **Option 2: Docker (Advanced)**
+
 ```bash
-# Terminal 1: Backend
-cd backend
-npm start
-
-# Terminal 2: Frontend
-cd frontend
-npm run dev
+cd newsletter-system
+docker-compose up --build
+# Acum rulează pe localhost:5000 (backend) și :3000 (frontend)
 ```
 
-### 4. Open Browser
-Navigate to: **http://localhost:3000**
+Deploy cu Docker:
+- **Heroku**: `git push heroku main`
+- **Railway**: Push la GitHub, Railway deploy automat
+- **AWS EC2**: Build & run Docker image
 
 ---
 
-## 📚 Documentation
+## 🧪 Testing Checklist
 
-- **[QUICK_START.md](./QUICK_START.md)** - 5-minute setup guide
-- **[SETUP.md](./SETUP.md)** - Detailed configuration guide
-- **[API Documentation](./backend/API.md)** - REST API reference
-
----
-
-## 📁 Project Structure
-
-```
-email-dashboard/
-├── backend/
-│   ├── src/
-│   │   ├── models/         # Sequelize models (Contact, Campaign, Email)
-│   │   ├── routes/         # API endpoints
-│   │   ├── services/       # emailService, queueService, verificationService
-│   │   ├── middleware/     # auth, errorHandler
-│   │   ├── config/         # database config
-│   │   └── index.js        # Express app
-│   ├── .env               # Environment configuration
-│   ├── .env.example       # Template
-│   └── package.json
-│
-├── frontend/
-│   ├── src/
-│   │   ├── pages/         # Dashboard, ContactsManager, SendEmail, etc.
-│   │   ├── components/    # AnimatedStatCard, QueueVisualization, etc.
-│   │   ├── contexts/      # UserPreferencesContext
-│   │   ├── services/      # API client
-│   │   ├── utils/         # Animation presets
-│   │   ├── hooks/         # useAnimationOnScroll, useCounter
-│   │   ├── i18n.jsx       # Translations (RO, RU, EN)
-│   │   ├── main.jsx       # App entry
-│   │   └── styles.css     # Global styles
-│   ├── .env
-│   ├── vite.config.js
-│   └── package.json
-│
-├── SETUP.md               # Full setup guide
-├── QUICK_START.md         # Quick 5-min start
-└── README.md              # This file
-```
-
----
-
-## 🚀 Usage
-
-### Add Contacts
-1. Go to **Email Database**
-2. Click **Add Email** or **Import CSV**
-3. Enter contact info
-4. Verification email sent automatically (user must confirm)
-
-### Send Email Campaign
-1. Go to **Send Email**
-2. Select recipients from database
-3. Write subject and message
-4. Click **Send**
-5. Monitor in **Delivery Status**
-
-### Monitor Delivery
-1. Go to **Delivery Status**
-2. See real-time queue progress
-3. View individual email statuses
-4. Retry failed emails
-
-### Customize Settings
-1. Go to **System Settings**
-2. Configure email provider
-3. Test connection
-4. Set sender identity
-
-### User Preferences
-1. Go to **System Settings**
-2. Set refresh interval
-3. Toggle animations
-4. All auto-saved! ✅
-
----
-
-## 🎨 Animations & UI
-
-The dashboard features:
-- **Stat cards** with counting animations
-- **Smooth page transitions** when switching views
-- **Animated charts** with drawing effects
-- **Hover effects** on interactive elements
-- **Staggered entrance** animations on page load
-- **Language switcher** with smooth transitions
-
-All animations **respect user preference** - disable in settings if needed!
-
----
-
-## 🔐 Security
-
-- ✅ Email verification prevents spam
-- ✅ SMTP credentials stored only in `.env`
-- ✅ No sensitive data in localStorage
-- ✅ Input validation on all endpoints
-- ✅ Environment variables for secrets
-
----
-
-## 🌍 Multi-Language Support
-
-Supported languages:
-- 🇷🇴 **Română** (Romanian)
-- 🇷🇺 **Русский** (Russian)
-- 🇬🇧 **English**
-
-Language choice auto-saves to localStorage and persists across sessions!
-
----
-
-## 📊 Email Providers Supported
-
-| Provider | Setup Time | Cost | Limits |
-|----------|-----------|------|--------|
-| **Mailgun** | 5 min | Free | 5,000/month |
-| **SendGrid** | 5 min | Free | 100/day |
-| **Gmail** | 5 min | Free | 500/day |
-| **Outlook** | 5 min | Free | Depends |
-| **Company SMTP** | Varies | Your cost | Unlimited |
-| **Preview** | 0 min | Free | Testing only |
-
----
-
-## 🛠️ Development
-
-### Run with Nodemon (Auto-restart)
+### 1. **Test AI Generation**
 ```bash
-cd backend
-npm run dev
+# Register și login
+# Go to "Create New" tab
+# Topic: "Tech News"
+# Wait 30-45 sec
+# ✅ Should see 3 articles cu imagini
 ```
 
-### Build Frontend
+### 2. **Test Email Sending**
 ```bash
-cd frontend
-npm run build
+# Go to "Subscribers" tab
+# Add your email
+# Go to "Newsletters" tab
+# Click "Send Now" on a newsletter
+# ✅ Check your inbox in 5 seconds
 ```
 
-### Run Tests
+### 3. **Test Scheduler**
 ```bash
-# Coming soon
+# Set schedule time to current_time + 1 min
+# Create newsletter
+# Schedule for that time
+# Wait... check backend logs
+# ✅ Should see "✅ Newsletter sent to X subscribers"
+```
+
+### 4. **Test Editor**
+```bash
+# Edit newsletter
+# Change text
+# Click "Regenerate Text" - wait 15 sec
+# Click "Regenerate Image" - wait 30 sec
+# Save
+# ✅ Changes should persist
 ```
 
 ---
 
-## 📝 API Endpoints
+## 🔐 Security Notes
 
-### Contacts
-- `GET /api/contacts` - List all
-- `POST /api/contacts` - Create + send verification
-- `POST /api/contacts/verify-email` - Verify email
-- `DELETE /api/contacts/:id` - Delete
+- **JWT Tokens**: Change `JWT_SECRET` in production
+- **Email Validation**: SendGrid validates sender
+- **CORS**: Set `FRONTEND_URL` to your domain
+- **Rate Limiting**: Add in production (middleware)
+- **API Keys**: NEVER commit .env files
 
-### Campaigns
-- `GET /api/campaigns` - List campaigns
-- `POST /api/campaigns` - Create campaign
-- `POST /api/campaigns/:id/send` - Send to contacts
-- `GET /api/campaigns/overview` - Statistics
+---
 
-### Queue
-- `GET /api/campaigns/stats/queue` - Queue status
-- `POST /api/campaigns/stats/queue/retry` - Retry failed
-- `POST /api/campaigns/stats/queue/clear` - Clear failed
+## 📊 Database Schema
 
-### Settings
-- `GET /api/settings/email` - Get email settings
-- `PUT /api/settings/email` - Update settings
+### **User**
+```javascript
+{
+  email: String (unique),
+  password: String (hashed),
+  companyName: String,
+  scheduleTime: String (HH:MM),
+  timezone: String,
+  isActive: Boolean,
+  createdAt: Date
+}
+```
+
+### **Newsletter**
+```javascript
+{
+  createdBy: ObjectId (User),
+  subject: String,
+  articles: [{
+    title: String,
+    content: String,
+    imageUrl: String,
+    imagePrompt: String
+  }],
+  status: String (draft|scheduled|sent|failed),
+  scheduledFor: Date,
+  sentAt: Date,
+  recipientCount: Number,
+  openCount: Number,
+  clickCount: Number
+}
+```
+
+### **Subscriber**
+```javascript
+{
+  email: String (unique),
+  firstName: String,
+  lastName: String,
+  isSubscribed: Boolean,
+  subscriptionDate: Date,
+  preferences: { frequency: String }
+}
+```
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Backend won't start
-```bash
-# Check Node version
-node --version  # Should be 16+
-
-# Check port 5000 is free
-# Or change in backend/.env
-```
-
-### Frontend shows blank
-```bash
-# Clear cache and rebuild
-cd frontend
-rm -rf node_modules
-npm install
-npm run dev
-```
-
-### Emails not sending
-```bash
-# Try Preview mode first
-# Then check SMTP credentials
-# Check firewall/VPN blocking port 587
-```
-
-### Language not saving
-```bash
-# Clear browser localStorage
-# Make sure it's enabled
-# Reload page
-```
-
----
-
-## 📈 Performance
-
-- ⚡ Fast SMTP delivery (< 5 seconds per email)
-- 🔄 Real-time queue updates (2.5s refresh)
-- 📊 Smooth 60fps animations
-- 💾 Lightweight bundle (~150KB gzipped)
-- 🗄️ Local SQLite database (no server required)
-
----
-
-## 🤝 Contributing
-
-Internal project - no external contributions.
-
-For issues or feature requests, contact the development team.
-
----
-
-## 📄 License
-
-Internal use only. All rights reserved.
-
----
-
-## 👥 Team
-
-Built with ❤️ for email campaign management.
+| Problem | Solution |
+|---------|----------|
+| `OPENAI_API_KEY not found` | Check .env file, restart server |
+| `Email not sending` | Check SendGrid API key, verify sender email |
+| `Scheduler not triggering` | Check server time, check timezone setting |
+| `MongoDB connection timeout` | IP whitelist on Atlas, check MONGODB_URI |
+| `CORS errors` | Set correct FRONTEND_URL in .env |
+| `Images blank in email` | DALL-E prompts too vague, try more details |
+| `Rate limit (429)` | OpenAI overloaded, wait 30 sec and retry |
 
 ---
 
 ## 📞 Support
 
-Need help? Check:
-1. **QUICK_START.md** - Quick setup
-2. **SETUP.md** - Detailed guide
-3. **This README** - Overview
-4. **Browser console** - Error messages
+- **Documentation**: Check README.md în fiecare folder
+- **Logs**: Check browser console și server terminal
+- **API Errors**: Lees response.data.error din axios calls
 
 ---
 
-**Happy emailing!** 📧✨
+## 📈 Next Steps
 
-v1.0.0 - June 2026
+- [ ] Add user profile/settings page
+- [ ] Add email templates library
+- [ ] Add A/B testing
+- [ ] Add detailed analytics
+- [ ] Add Stripe payment for premium features
+- [ ] Add multi-user teams
+- [ ] Mobile app
+
+---
+
+## 📄 License
+
+MIT
+
+---
+
+**Creat cu ❤️ pentru newsletter automation**

@@ -1,283 +1,126 @@
-import nodemailer from 'nodemailer';
-import { Resend } from 'resend';
-import SystemSetting from '../models/SystemSetting.js';
-import logger from './logger.js';
+const sgMail = require('@sendgrid/mail');
+const Newsletter = require('../models/Newsletter');
 
-// Validate required environment variables for production
-function validateEmailConfig() {
-  if (process.env.NODE_ENV === 'production' && !process.env.EMAIL_PROVIDER) {
-    throw new Error('EMAIL_PROVIDER environment variable is required in production');
-  }
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+
+function generateEmailHTML(newsletter) {
+  const articlesHTML = newsletter.articles.map(article => `
+    <div style="margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+      ${article.imageUrl ? `<img src="${article.imageUrl}" alt="${article.title}" style="width: 100%; max-width: 500px; border-radius: 8px; margin-bottom: 15px;">` : ''}
+      <h2 style="color: #333; font-size: 20px; margin: 10px 0;">${article.title}</h2>
+      <p style="color: #666; font-size: 14px; line-height: 1.6;">${article.content}</p>
+    </div>
+  `).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: Arial, sans-serif; background-color: #f5f5f5;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 10px;">
+        <h1 style="color: #1a73e8; text-align: center; margin-bottom: 30px;">
+          📬 ${newsletter.subject}
+        </h1>
+
+        ${articlesHTML}
+
+        <div style="margin-top: 30px; padding: 20px; background-color: #f0f0f0; border-radius: 8px; text-align: center;">
+          <p style="color: #666; font-size: 12px;">
+            © ${new Date().getFullYear()} Newsletter. All rights reserved.
+          </p>
+          <a href="[unsubscribe]" style="color: #999; font-size: 11px; text-decoration: none;">Unsubscribe</a>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
 }
 
-validateEmailConfig();
-
-const defaults = {
-  provider: process.env.EMAIL_PROVIDER || 'preview',
-  senderName: process.env.SENDER_NAME || 'Company Mail Center',
-  senderEmail: process.env.EMAIL_FROM || null, // No default - must be configured
-  smtpHost: process.env.SMTP_HOST || '',
-  smtpPort: 587,
-  smtpSecure: false,
-  smtpUser: process.env.SMTP_USER || null, // No default - must be configured
-  smtpPassword: process.env.SMTP_PASS || '',
-  sendgridApiKey: process.env.SENDGRID_API_KEY || '',
-  resendApiKey: process.env.RESEND_API_KEY || ''
-};
-
-let transporter;
-let resendClient;
-let settings = { ...defaults };
-
-function createTransport(config) {
-  if (config.provider === 'resend' && config.resendApiKey) {
-    resendClient = new Resend(config.resendApiKey);
-    // Return a dummy transporter for compatibility
-    return {
-      verify: async () => true,
-      sendMail: async (mailOptions) => {
-        // This will be overridden in sendEmail function
-        return { messageId: 'resend-dummy' };
-      }
-    };
-  }
-
-  if (config.provider === 'gmail' && config.smtpUser) {
-    return nodemailer.createTransport({
-      service: 'gmail',
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      auth: { user: config.smtpUser, pass: config.smtpPassword }
-    });
-  }
-
-  if (config.provider === 'outlook' && config.smtpUser) {
-    return nodemailer.createTransport({
-      host: 'smtp.office365.com',
-      port: 587,
-      secure: false,
-      auth: { user: config.smtpUser, pass: config.smtpPassword }
-    });
-  }
-
-  if (config.provider === 'sendgrid' && config.sendgridApiKey) {
-    return nodemailer.createTransport({
-      host: 'smtp.sendgrid.net',
-      port: 587,
-      secure: false,
-      auth: { user: 'apikey', pass: config.sendgridApiKey }
-    });
-  }
-
-  if (config.provider === 'smtp' && config.smtpHost) {
-    return nodemailer.createTransport({
-      host: config.smtpHost,
-      port: Number(config.smtpPort || 587),
-      secure: Boolean(config.smtpSecure),
-      auth: config.smtpUser
-        ? { user: config.smtpUser, pass: config.smtpPassword }
-        : undefined
-    });
-  }
-
-  return nodemailer.createTransport({ jsonTransport: true });
-}
-
-export async function initializeEmailService() {
-  const stored = await SystemSetting.findByPk('email');
-
-  // PRIORITIZE .env FIRST, then database
-  const envProvider = process.env.EMAIL_PROVIDER;
-  const provider = envProvider || stored?.value?.provider || 'preview';
-
-  logger.debug('EMAIL_SERVICE', 'Loading configuration...');
-  logger.debug('EMAIL_SERVICE', `Provider config: env=${envProvider}, stored=${stored?.value?.provider}`);
-
-  settings = {
-    ...defaults,
-    provider,
-    senderName: process.env.SENDER_NAME || stored?.value?.senderName || defaults.senderName,
-    senderEmail: process.env.EMAIL_FROM || stored?.value?.senderEmail || process.env.SENDGRID_FROM_EMAIL || defaults.senderEmail,
-    smtpHost: process.env.SMTP_HOST || stored?.value?.smtpHost || '',
-    smtpPort: Number(process.env.SMTP_PORT || stored?.value?.smtpPort || 587),
-    smtpSecure: process.env.SMTP_SECURE === 'true' || stored?.value?.smtpSecure || false,
-    smtpUser: process.env.SMTP_USER || stored?.value?.smtpUser || '',
-    smtpPassword: process.env.SMTP_PASS || stored?.value?.smtpPassword || '',
-    sendgridApiKey: process.env.SENDGRID_API_KEY || stored?.value?.sendgridApiKey || '',
-    resendApiKey: process.env.RESEND_API_KEY || stored?.value?.resendApiKey || ''
-  };
-
-  logger.info('EMAIL_SERVICE', `Configuration loaded: provider=${settings.provider}, hasAuth=${!!settings.smtpUser}, hasPassword=${!!settings.smtpPassword}`);
-
-  transporter = createTransport(settings);
-  console.log(`Email service initialized (${settings.provider} mode)`);
-}
-
-export async function getEmailSettings() {
-  if (!transporter) await initializeEmailService();
-  return {
-    ...settings,
-    smtpPassword: settings.smtpPassword ? '********' : '',
-    sendgridApiKey: settings.sendgridApiKey ? '********' : ''
-  };
-}
-
-export function isRealEmailDeliveryConfigured() {
-  if (settings.provider === 'gmail' || settings.provider === 'outlook') {
-    return Boolean(settings.smtpUser && settings.smtpPassword);
-  }
-  if (settings.provider === 'smtp') {
-    return Boolean(settings.smtpHost);
-  }
-  if (settings.provider === 'sendgrid') {
-    return Boolean(settings.sendgridApiKey);
-  }
-  if (settings.provider === 'resend') {
-    return Boolean(settings.resendApiKey);
-  }
-  return false;
-}
-
-export async function updateEmailSettings(input) {
-  const next = {
-    ...settings,
-    provider: ['preview', 'gmail', 'outlook', 'smtp', 'sendgrid'].includes(input.provider) ? input.provider : 'preview',
-    senderName: input.senderName?.trim() || defaults.senderName,
-    senderEmail: input.senderEmail?.trim() || defaults.senderEmail,
-    smtpHost: input.smtpHost?.trim() || '',
-    smtpPort: Number(input.smtpPort || 587),
-    smtpSecure: Boolean(input.smtpSecure),
-    smtpUser: input.smtpUser?.trim() || '',
-    smtpPassword: input.smtpPassword && input.smtpPassword !== '********'
-      ? input.smtpPassword
-      : settings.smtpPassword,
-    sendgridApiKey: input.sendgridApiKey && input.sendgridApiKey !== '********'
-      ? input.sendgridApiKey
-      : settings.sendgridApiKey
-  };
-
-  await SystemSetting.upsert({ key: 'email', value: next });
-  settings = next;
-  transporter = createTransport(settings);
-  return getEmailSettings();
-}
-
-export async function verifyEmailConnection() {
-  if (!transporter) await initializeEmailService();
-  if (settings.provider === 'preview') {
-    return { success: true, message: 'Preview mode is ready. No real emails will be sent.' };
-  }
-  await transporter.verify();
-  return { success: true, message: `${settings.provider.toUpperCase()} connection verified successfully.` };
-}
-
-export function normalizeAttachments(input = []) {
-  return input.map((attachment, index) => ({
-    filename: attachment.filename || `attachment_${index}`,
-    content: Buffer.isBuffer(attachment.content)
-      ? attachment.content
-      : Buffer.from(attachment.content, 'base64'),
-    contentType: attachment.contentType || 'application/octet-stream'
-  }));
-}
-
-export async function sendEmail(emailData) {
-  if (!transporter) await initializeEmailService();
-
-  // Validate email configuration before sending
-  if (!isRealEmailDeliveryConfigured()) {
-    throw new Error(
-      `Email delivery is not configured. Current provider: "${settings.provider}". ` +
-      `Please configure email settings with a valid provider (gmail, outlook, sendgrid, resend, or smtp).`
-    );
-  }
-
-  // Use Resend if provider is resend
-  if (settings.provider === 'resend' && resendClient) {
-    try {
-      console.log('[EMAIL SERVICE] Using Resend provider');
-      const attachments = normalizeAttachments(emailData.attachments);
-      const result = await resendClient.emails.send({
-        from: settings.senderEmail,
-        to: emailData.to,
-        subject: emailData.subject,
-        html: emailData.personalizedHtml || emailData.html,
-        text: emailData.personalizedText || emailData.text,
-        attachments: attachments.length > 0 ? attachments : undefined
-      });
-
-      if (result.error) {
-        throw result.error;
-      }
-
-      console.log(`[EMAIL SERVICE] ✅ Resend sent successfully: ${result.data.id}`);
-      return {
-        success: true,
-        messageId: result.data.id,
-        response: result.data
-      };
-    } catch (error) {
-      console.error('[EMAIL SERVICE] ❌ Resend error:', error.message || error);
-      throw error;
-    }
-  }
-
-  // Fall back to Nodemailer for other providers (Gmail, Outlook, SendGrid, SMTP, etc.)
+async function sendNewsletter(newsletter, recipients) {
   try {
-    // Skip verbose logging for speed
-    // console.log(`[EMAIL SERVICE] 🚀 ATTEMPTING TO SEND EMAIL`);
-    // console.log(`[EMAIL SERVICE] Provider: ${settings.provider}`);
-    // console.log(`[EMAIL SERVICE] From: ${settings.senderEmail}`);
-    // console.log(`[EMAIL SERVICE] To: ${emailData.to}`);
-    // console.log(`[EMAIL SERVICE] Subject: ${emailData.subject}`);
-    // console.log(`[EMAIL SERVICE] SMTP User: ${settings.smtpUser}`);
-    // console.log(`[EMAIL SERVICE] SMTP Password: ${settings.smtpPassword || 'NOT SET'}`);
-    // console.log(`[EMAIL SERVICE] Password length: ${settings.smtpPassword?.length}`);
+    console.log(`📧 Sending newsletter to ${recipients.length} subscribers...`);
 
-    // SKIP VERIFICATION - it's slow! Just send directly
-    // if (settings.provider === 'gmail') {
-    //   try {
-    //     console.log(`[EMAIL SERVICE] ✅ Verifying Gmail connection...`);
-    //     await transporter.verify();
-    //     console.log(`[EMAIL SERVICE] ✅ Gmail connection verified!`);
-    //   } catch (verifyErr) {
-    //     console.error(`[EMAIL SERVICE] ❌ GMAIL VERIFICATION FAILED:`, verifyErr.message);
-    //     throw verifyErr;
-    //   }
-    // }
+    const emailHTML = generateEmailHTML(newsletter);
+    const successCount = { count: 0 };
+    const failedEmails = [];
 
-    const attachments = normalizeAttachments(emailData.attachments);
+    // Send in batches of 50 to avoid rate limits
+    const batchSize = 50;
+    for (let i = 0; i < recipients.length; i += batchSize) {
+      const batch = recipients.slice(i, i + batchSize);
+      const promises = batch.map(recipient =>
+        sgMail.send({
+          to: recipient.email,
+          from: process.env.FROM_EMAIL || 'noreply@newsletter.com',
+          subject: newsletter.subject,
+          html: emailHTML,
+          trackingSettings: {
+            clickTracking: { enable: true },
+            openTracking: { enable: true }
+          },
+          customArgs: {
+            newsletterId: newsletter._id.toString(),
+            recipientEmail: recipient.email
+          }
+        }).then(() => {
+          successCount.count++;
+        }).catch(error => {
+          console.error(`Failed to send to ${recipient.email}:`, error.message);
+          failedEmails.push(recipient.email);
+        })
+      );
 
-    console.log(`[EMAIL SERVICE] Total attachments to send: ${attachments.length}`);
+      await Promise.all(promises);
+      console.log(`   ✅ Batch ${Math.ceil((i + batchSize) / batchSize)} sent (${Math.min(i + batchSize, recipients.length)}/${recipients.length})`);
+    }
 
-    // Send with 10 second timeout
-    const sendMailPromise = transporter.sendMail({
-      from: `"${settings.senderName}" <${settings.senderEmail}>`,
-      to: emailData.to,
-      subject: emailData.subject,
-      html: emailData.personalizedHtml || emailData.html,
-      text: emailData.personalizedText || emailData.text,
-      attachments: attachments.length > 0 ? attachments : undefined
-    });
+    newsletter.status = 'sent';
+    newsletter.sentAt = new Date();
+    newsletter.recipientCount = successCount.count;
+    await newsletter.save();
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Email send timeout after 10s')), 10000)
-    );
+    console.log(`✅ Newsletter sent successfully to ${successCount.count} subscribers`);
+    if (failedEmails.length > 0) {
+      console.warn(`⚠️  Failed to send to ${failedEmails.length} emails:`, failedEmails);
+    }
 
-    const result = await Promise.race([sendMailPromise, timeoutPromise]);
-
-    console.log(`[EMAIL SERVICE] ✅ Nodemailer sent successfully via ${settings.provider}`);
-    console.log(`[EMAIL SERVICE] Message ID: ${result.messageId || result.id}`);
-    return {
-      success: true,
-      messageId: result.messageId || result.id,
-      response: result.response
-    };
+    return { success: true, sent: successCount.count, failed: failedEmails.length };
   } catch (error) {
-    console.error(`[EMAIL SERVICE] ❌ Nodemailer error sending via ${settings.provider}:`);
-    console.error(`[EMAIL SERVICE] Error message: ${error.message}`);
-    console.error(`[EMAIL SERVICE] Full error:`, error);
+    console.error('❌ Email service error:', error.message);
+    newsletter.status = 'failed';
+    newsletter.failureReason = error.message;
+    await newsletter.save();
     throw error;
   }
 }
+
+async function testEmail(recipient) {
+  try {
+    const msg = {
+      to: recipient,
+      from: process.env.FROM_EMAIL || 'noreply@newsletter.com',
+      subject: '🧪 Newsletter System - Test Email',
+      html: `
+        <h1>Test Email</h1>
+        <p>Your newsletter system is working correctly!</p>
+        <p>Timestamp: ${new Date().toISOString()}</p>
+      `
+    };
+
+    await sgMail.send(msg);
+    console.log(`✅ Test email sent to ${recipient}`);
+    return true;
+  } catch (error) {
+    console.error('❌ Test email failed:', error.message);
+    throw error;
+  }
+}
+
+module.exports = {
+  sendNewsletter,
+  testEmail,
+  generateEmailHTML
+};

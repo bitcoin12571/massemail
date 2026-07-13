@@ -1,172 +1,104 @@
-import cron from 'node-cron';
-import Campaign from '../models/Campaign.js';
-import Email from '../models/Email.js';
-import Contact from '../models/Contact.js';
-import { emailQueue } from './queueService.js';
-import processPendingScheduledCampaigns from './scheduledSendService.js';
-import { Op } from 'sequelize';
-import logger from './logger.js';
+const schedule = require('node-schedule');
+const Newsletter = require('../models/Newsletter');
+const Subscriber = require('../models/Subscriber');
+const User = require('../models/User');
+const { sendNewsletter } = require('./emailService');
 
-/**
- * Email scheduler service
- * Runs cron jobs to check for scheduled campaigns and trigger them at the right time
- */
+const activeSchedules = new Map();
 
-let schedulerTask = null;
-let scheduledCampaignTask = null;
-
-/**
- * Start the email scheduler
- * Runs every minute to check for campaigns that should be sent
- */
-export function startScheduler() {
-  if (schedulerTask) {
-    logger.warn('SCHEDULER', 'Scheduler already running, skipping restart');
-    return;
-  }
-
-  // Run every minute
-  schedulerTask = cron.schedule('* * * * *', async () => {
-    try {
-      await processScheduledCampaigns();
-    } catch (error) {
-      logger.error('SCHEDULER', 'Error processing scheduled campaigns:', error);
-    }
-  });
-
-  logger.info('SCHEDULER', 'Email scheduler started (runs every minute)');
-
-  // Also start scheduled campaign sender (every hour)
-  if (!scheduledCampaignTask) {
-    scheduledCampaignTask = cron.schedule('0 * * * *', async () => {
-      try {
-        logger.info('SCHEDULER', 'Running scheduled campaign processor...');
-        await processPendingScheduledCampaigns();
-      } catch (error) {
-        logger.error('SCHEDULER', 'Error in scheduled campaign processor:', error);
-      }
-    });
-    logger.info('SCHEDULER', 'Scheduled campaign processor started (runs every hour)');
-  }
-}
-
-/**
- * Stop the email scheduler
- */
-export function stopScheduler() {
-  if (schedulerTask) {
-    schedulerTask.stop();
-    schedulerTask = null;
-    logger.info('SCHEDULER', 'Email scheduler stopped');
-  }
-  if (scheduledCampaignTask) {
-    scheduledCampaignTask.stop();
-    scheduledCampaignTask = null;
-    logger.info('SCHEDULER', 'Scheduled campaign processor stopped');
-  }
-}
-
-/**
- * Process campaigns that are scheduled to send now
- */
-export async function processScheduledCampaigns() {
+async function sendScheduledNewsletter(userId) {
   try {
-    // Find campaigns that are scheduled and their scheduledAt time is now or in the past
-    const now = new Date();
+    console.log(`\n⏰ [${new Date().toISOString()}] Checking for scheduled newsletters for user: ${userId}`);
 
-    const scheduledCampaigns = await Campaign.findAll({
-      where: {
-        status: 'scheduled',
-        scheduledAt: {
-          [Op.lte]: now
-        }
-      }
+    // Find newsletter that's ready to send
+    const newsletter = await Newsletter.findOne({
+      createdBy: userId,
+      status: 'scheduled',
+      scheduledFor: { $lte: new Date() }
     });
 
-    if (scheduledCampaigns.length === 0) {
-      return; // No campaigns to process
-    }
-
-    console.log(`[SCHEDULER] 📅 Found ${scheduledCampaigns.length} campaign(s) to send`);
-
-    for (const campaign of scheduledCampaigns) {
-      await triggerCampaignSend(campaign);
-    }
-  } catch (error) {
-    console.error('[SCHEDULER] ❌ Error in processScheduledCampaigns:', error);
-  }
-}
-
-/**
- * Trigger sending of a campaign
- * Creates Email records and queues them for sending
- */
-async function triggerCampaignSend(campaign) {
-  try {
-    console.log(`[SCHEDULER] 🚀 Triggering send for campaign ${campaign.id}: "${campaign.name}"`);
-
-    // Update campaign status to 'sending'
-    await campaign.update({ status: 'sending' });
-
-    // Get all active contacts for this user
-    const contacts = await Contact.findAll({
-      where: {
-        createdBy: campaign.createdBy,
-        status: 'active'
-      }
-    });
-
-    if (contacts.length === 0) {
-      console.log(`[SCHEDULER] ⚠️ No active contacts found for campaign ${campaign.id}`);
-      await campaign.update({ status: 'sent' });
+    if (!newsletter) {
+      console.log('   No newsletters to send');
       return;
     }
 
-    console.log(`[SCHEDULER] 📧 Queuing emails for ${contacts.length} contact(s)`);
+    console.log(`   📬 Found newsletter: "${newsletter.subject}"`);
 
-    // Create Email records and add to queue
-    for (const contact of contacts) {
-      try {
-        const email = await Email.create({
-          campaignId: campaign.id,
-          contactId: contact.id,
-          recipientEmail: contact.email,
-          status: 'pending'
-        });
+    // Get all active subscribers
+    const subscribers = await Subscriber.find({ isSubscribed: true });
+    console.log(`   👥 Sending to ${subscribers.length} subscribers`);
 
-        // Add to queue for processing
-        await emailQueue.add({
-          emailId: email.id,
-          campaignId: campaign.id,
-          contactId: contact.id
-        });
-      } catch (emailError) {
-        console.error(`[SCHEDULER] ❌ Error creating email for contact ${contact.id}:`, emailError);
-      }
+    if (subscribers.length === 0) {
+      console.warn('   ⚠️  No subscribers found');
+      newsletter.status = 'failed';
+      newsletter.failureReason = 'No active subscribers';
+      await newsletter.save();
+      return;
     }
 
-    console.log(`[SCHEDULER] ✅ Campaign ${campaign.id} send triggered successfully`);
+    // Send newsletter
+    const result = await sendNewsletter(newsletter, subscribers);
+    console.log(`   ✅ Newsletter sent! (${result.sent} successful, ${result.failed} failed)`);
   } catch (error) {
-    console.error(`[SCHEDULER] ❌ Error triggering campaign ${campaign.id}:`, error);
-    // Don't update campaign status, let it retry next time
+    console.error('   ❌ Scheduler error:', error.message);
   }
 }
 
-/**
- * Get scheduler status
- */
-export function getSchedulerStatus() {
+function scheduleForUser(user) {
+  // Kill previous schedule if exists
+  if (activeSchedules.has(user._id.toString())) {
+    const job = activeSchedules.get(user._id.toString());
+    job.cancel();
+    console.log(`   Cancelled previous schedule for ${user.email}`);
+  }
+
+  const [hours, minutes] = user.scheduleTime.split(':');
+  const cronExpression = `${minutes} ${hours} * * *`; // Daily at HH:MM
+
+  console.log(`   ⏰ Scheduling: ${user.scheduleTime} daily (${cronExpression})`);
+
+  const job = schedule.scheduleJob(cronExpression, () => {
+    sendScheduledNewsletter(user._id);
+  });
+
+  activeSchedules.set(user._id.toString(), job);
+  console.log(`   ✅ Schedule registered for ${user.email}`);
+}
+
+async function initializeSchedulers() {
+  try {
+    console.log('\n🚀 Initializing schedulers for all users...');
+    const users = await User.find({ isActive: true });
+    console.log(`   Found ${users.length} active users`);
+
+    for (const user of users) {
+      scheduleForUser(user);
+    }
+
+    console.log('✅ All schedulers initialized\n');
+  } catch (error) {
+    console.error('❌ Failed to initialize schedulers:', error.message);
+  }
+}
+
+function updateSchedule(user) {
+  console.log(`\n📝 Updating schedule for ${user.email}`);
+  scheduleForUser(user);
+}
+
+function getScheduleStatus() {
   return {
-    running: schedulerTask !== null,
-    nextRun: schedulerTask ? 'every minute' : 'not running'
+    activeSchedules: activeSchedules.size,
+    schedules: Array.from(activeSchedules.entries()).map(([userId, job]) => ({
+      userId,
+      nextRun: job.nextInvocation()
+    }))
   };
 }
 
-/**
- * Manually trigger processing of scheduled campaigns (for testing)
- */
-export async function manualTriggerScheduler() {
-  console.log('[SCHEDULER] 🔄 Manual trigger initiated');
-  await processScheduledCampaigns();
-  console.log('[SCHEDULER] ✅ Manual trigger completed');
-}
+module.exports = {
+  initializeSchedulers,
+  updateSchedule,
+  sendScheduledNewsletter,
+  getScheduleStatus
+};

@@ -1,58 +1,47 @@
-import React, { useEffect, useState } from 'react';
-import Dashboard from './pages/Dashboard.jsx';
-import Login from './pages/Login.jsx';
-import { initializeCsrfToken } from './services/api.js';
+import React, { useState, useEffect } from 'react'
+import axios from 'axios'
+import './App.css'
+import AuthPage from './pages/AuthPage'
+import Dashboard from './pages/Dashboard'
 
-function readStoredUser() {
-  if (!localStorage.getItem('authToken')) return null;
+// Configure API URL for deployment
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+axios.defaults.baseURL = API_URL
 
-  try {
-    return JSON.parse(localStorage.getItem('mailoraUser'));
-  } catch {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('mailoraUser');
-    return null;
-  }
-}
-
-function clearLegacyBrowserOnlyData() {
-  const versionKey = 'mailoraServerSourceOfTruthVersion';
-  const currentVersion = '2026-06-18-server-v1';
-  if (localStorage.getItem(versionKey) === currentVersion) return;
-
-  localStorage.removeItem('mailoraParsedRecipients');
-  localStorage.removeItem('mailoraSendHistory');
-  localStorage.removeItem('mailoraBulkCampaigns');
-  localStorage.setItem(versionKey, currentVersion);
-}
-
-export default function App() {
-  const [user, setUser] = useState(readStoredUser);
+function App() {
+  const [token, setToken] = useState(localStorage.getItem('token'))
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    clearLegacyBrowserOnlyData();
-    // Initialize CSRF token for security
-    initializeCsrfToken();
-    const logout = () => setUser(null);
-    window.addEventListener('mailora:logout', logout);
-    return () => window.removeEventListener('mailora:logout', logout);
-  }, []);
-
-  const handleLogin = (token, nextUser) => {
-    localStorage.setItem('authToken', token);
-    localStorage.setItem('mailoraUser', JSON.stringify(nextUser));
-    setUser(nextUser);
-  };
+    const storedToken = localStorage.getItem('token')
+    if (storedToken) {
+      setToken(storedToken)
+      axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`
+    }
+    setLoading(false)
+  }, [])
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('mailoraUser');
-    sessionStorage.removeItem('csrfToken');
-    sessionStorage.removeItem('sessionId');
-    setUser(null);
-  };
+    setToken(null)
+    localStorage.removeItem('token')
+    delete axios.defaults.headers.common['Authorization']
+  }
 
-  return user
-    ? <Dashboard user={user} onLogout={handleLogout} />
-    : <Login onLogin={handleLogin} />;
+  const handleLogin = (newToken) => {
+    setToken(newToken)
+    localStorage.setItem('token', newToken)
+    axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
+  }
+
+  if (loading) {
+    return <div className="loading">Loading...</div>
+  }
+
+  return token ? (
+    <Dashboard onLogout={handleLogout} />
+  ) : (
+    <AuthPage onLogin={handleLogin} />
+  )
 }
+
+export default App

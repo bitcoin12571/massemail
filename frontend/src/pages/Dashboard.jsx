@@ -1,188 +1,125 @@
-import React, { lazy, Suspense, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Avatar,
-  Box,
-  Button,
-  IconButton,
-  LinearProgress,
-  Stack,
-  Typography
-} from '@mui/material';
-import {
-  BarChart3,
-  ContactRound,
-  History,
-  LogOut,
-  MailPlus,
-  Menu,
-  Search,
-  Send,
-  Upload
-} from 'lucide-react';
-import { useLanguage } from '../i18n.jsx';
-import { pageTransition } from '../utils/animations';
-import AnimatedLanguageSwitcher from '../components/AnimatedLanguageSwitcher';
-import smartGrowthLogo from '../assets/smart-growth-ai-logo.png';
+import React, { useState, useEffect } from 'react'
+import axios from 'axios'
+import './Dashboard.css'
+import NewsletterGenerator from '../components/NewsletterGenerator'
+import NewsletterList from '../components/NewsletterList'
+import NewsletterEditor from '../components/NewsletterEditor'
+import ScheduleSettings from '../components/ScheduleSettings'
+import SubscriberManager from '../components/SubscriberManager'
 
-const CampaignDashboard = lazy(() => import('./CampaignDashboard'));
-const QueueMonitor = lazy(() => import('../components/QueueMonitor'));
-const ContactsManager = lazy(() => import('./ContactsManager'));
-const SendEmail = lazy(() => import('./SendEmail'));
-const EmailParser = lazy(() => import('../components/EmailParser'));
-const BulkSender = lazy(() => import('../components/BulkSender'));
+export default function Dashboard({ onLogout }) {
+  const [activeTab, setActiveTab] = useState('newsletters')
+  const [user, setUser] = useState(null)
+  const [stats, setStats] = useState(null)
+  const [refresh, setRefresh] = useState(false)
 
-export default function Dashboard({ user, onLogout }) {
-  const { t } = useLanguage();
-  const [activePage, setActivePage] = useState(0);
-  const [mobileNav, setMobileNav] = useState(false);
-  const navigation = [
-    { label: t('emailDatabase'), icon: ContactRound },
-    { label: t('sendNow'), icon: MailPlus },
-    { label: t('sendHistory'), icon: History },
-    { label: t('deliveryStatus'), icon: BarChart3 },
-    { label: t('emailParser'), icon: Upload },
-    { label: t('bulkSender'), icon: Send }
-  ];
+  useEffect(() => {
+    fetchUserData()
+    fetchStats()
+  }, [refresh])
+
+  const fetchUserData = async () => {
+    try {
+      const response = await axios.get('/api/auth/me')
+      setUser(response.data)
+    } catch (error) {
+      console.error('Failed to fetch user data:', error)
+    }
+  }
+
+  const fetchStats = async () => {
+    try {
+      const response = await axios.get('/api/admin/stats')
+      setStats(response.data)
+    } catch (error) {
+      console.error('Failed to fetch stats:', error)
+    }
+  }
+
+  const handleRefresh = () => {
+    setRefresh(!refresh)
+  }
 
   return (
-    <Box className="app-shell">
-      <Box component="aside" className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
-        <Box className="brand">
-          <Box
-            component="img"
-            className="brand-logo"
-            src={smartGrowthLogo}
-            alt="Smart Growth AI"
-          />
-          <Box>
-            <Typography className="brand-name">Smart Growth AI</Typography>
-            <Typography className="brand-subtitle">Internal system</Typography>
-          </Box>
-        </Box>
+    <div className="dashboard-container">
+      <header className="dashboard-header">
+        <div className="header-content">
+          <h1>📬 Newsletter Dashboard</h1>
+          <div className="header-actions">
+            <span className="user-email">{user?.email}</span>
+            <button className="btn-logout" onClick={onLogout}>Logout</button>
+          </div>
+        </div>
+      </header>
 
-        <Typography className="nav-caption">{t('companyTools')}</Typography>
-        <Stack spacing={0.75}>
-          {navigation.map(({ label, icon: Icon }, index) => (
-            <Button
-              key={label}
-              className={`nav-item ${activePage === index ? 'active' : ''}`}
-              startIcon={<Icon size={19} />}
-              onClick={() => {
-                setActivePage(index);
-                setMobileNav(false);
-              }}
-            >
-              {label}
-              {index === 3 && <Box component="span" className="live-dot" />}
-            </Button>
-          ))}
-        </Stack>
+      {stats && (
+        <div className="stats-bar">
+          <div className="stat-card">
+            <span className="stat-value">{stats.totalNewsletters}</span>
+            <span className="stat-label">Total Newsletters</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-value">{stats.sentNewsletters}</span>
+            <span className="stat-label">Sent</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-value">{stats.totalSubscribers}</span>
+            <span className="stat-label">Subscribers</span>
+          </div>
+          <div className="stat-card">
+            <span className="stat-value">{stats.totalEmailsSent}</span>
+            <span className="stat-label">Emails Sent</span>
+          </div>
+        </div>
+      )}
 
-        <Box className="sidebar-spacer" />
+      <nav className="dashboard-nav">
+        <button
+          className={`nav-item ${activeTab === 'newsletters' ? 'active' : ''}`}
+          onClick={() => setActiveTab('newsletters')}
+        >
+          📰 Newsletters
+        </button>
+        <button
+          className={`nav-item ${activeTab === 'create' ? 'active' : ''}`}
+          onClick={() => setActiveTab('create')}
+        >
+          ✨ Create New
+        </button>
+        <button
+          className={`nav-item ${activeTab === 'subscribers' ? 'active' : ''}`}
+          onClick={() => setActiveTab('subscribers')}
+        >
+          👥 Subscribers
+        </button>
+        <button
+          className={`nav-item ${activeTab === 'schedule' ? 'active' : ''}`}
+          onClick={() => setActiveTab('schedule')}
+        >
+          ⏰ Schedule
+        </button>
+      </nav>
 
-        <Box className="profile-card">
-          <Avatar sx={{ width: 38, height: 38, bgcolor: '#d9f6ea', color: '#087a55' }}>AM</Avatar>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography fontWeight={700} noWrap>{user?.name || t('administrator')}</Typography>
-            <Typography variant="caption" color="text.secondary" noWrap>{user?.email || t('companyAccess')}</Typography>
-          </Box>
-          <IconButton size="small" aria-label="Log out" onClick={onLogout}>
-            <LogOut size={17} />
-          </IconButton>
-        </Box>
-      </Box>
-
-      {mobileNav && <Box className="nav-backdrop" onClick={() => setMobileNav(false)} />}
-
-      <Box component="main" className="main-panel">
-        <Box component="header" className="topbar">
-          <IconButton className="mobile-menu" onClick={() => setMobileNav(true)}>
-            <Menu size={21} />
-          </IconButton>
-          <Box className="search-box">
-            <Search size={18} />
-            <input aria-label="Search" placeholder={t('searchDatabase')} />
-            <Box component="span">⌘ K</Box>
-          </Box>
-          <Box className="topbar-actions">
-            <AnimatedLanguageSwitcher />
-          </Box>
-        </Box>
-
-        <Box className="page-content">
-          <Suspense fallback={<LinearProgress aria-label="Loading page" />}>
-            <AnimatePresence mode="wait">
-              {activePage === 0 && (
-                <motion.div
-                  key="contacts"
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  variants={pageTransition}
-                >
-                  <ContactsManager mode="database" />
-                </motion.div>
-              )}
-              {activePage === 1 && (
-                <motion.div
-                  key="send"
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  variants={pageTransition}
-                >
-                  <SendEmail />
-                </motion.div>
-              )}
-              {activePage === 2 && (
-                <motion.div
-                  key="campaign"
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  variants={pageTransition}
-                >
-                  <CampaignDashboard onOpenDatabase={() => setActivePage(1)} />
-                </motion.div>
-              )}
-              {activePage === 3 && (
-                <motion.div
-                  key="queue"
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  variants={pageTransition}
-                >
-                  <QueueMonitor />
-                </motion.div>
-              )}
-              {activePage === 4 && (
-                <motion.div
-                  key="parser"
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  variants={pageTransition}
-                >
-                  <EmailParser />
-                </motion.div>
-              )}
-              {activePage === 5 && (
-                <motion.div
-                  key="bulksender"
-                  initial="initial"
-                  animate="animate"
-                  exit="exit"
-                  variants={pageTransition}
-                >
-                  <BulkSender />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </Suspense>
-        </Box>
-      </Box>
-    </Box>
-  );
+      <main className="dashboard-content">
+        {activeTab === 'newsletters' && (
+          <NewsletterList onRefresh={handleRefresh} />
+        )}
+        {activeTab === 'create' && (
+          <NewsletterGenerator onSuccess={() => {
+            setActiveTab('newsletters')
+            handleRefresh()
+          }} />
+        )}
+        {activeTab === 'subscribers' && (
+          <SubscriberManager />
+        )}
+        {activeTab === 'schedule' && (
+          <ScheduleSettings user={user} onUpdate={() => {
+            fetchUserData()
+            handleRefresh()
+          }} />
+        )}
+      </main>
+    </div>
+  )
 }
